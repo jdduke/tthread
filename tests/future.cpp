@@ -31,50 +31,31 @@ freely, subject to the following restrictions:
 using namespace std;
 using namespace tthread;
 
-float nine()
-{
-  return 9.f;
-}
-
-float sqr(int x)
-{
-#if defined(_DEBUG)
-  cout << x << " -> " << x*x << endl;
-#endif
-  return (float)x*x;
-}
-
-template<typename Iterator,typename Func>
-void parallel_for_each(Iterator first,Iterator last,Func f) {
-  ptrdiff_t const range_length=last-first;
-  if(!range_length)
-    return;
-  if(range_length==1) {
-    f(*first);
-    return;
-  }
-
-  Iterator const mid=first+(range_length/2);
-
-  future<void> bgtask = async(&parallel_for_each<Iterator,Func>, first, mid, f);
-
-  try {
-    parallel_for_each(mid,last,f);
-  }
-  catch(...) {
-    bgtask.wait();
-    throw;
-  }
-
-  bgtask.get();
+int ackermann(int m, int n) {
+  if(m==0) return n+1;
+  if(n==0) return ackermann(m-1,1);
+  return ackermann(m-1, ackermann(m, n-1));
 }
 
 int main() {
-  auto f = async(&nine);
-  cout << " Result is: " << f.get() << endl;
 
-  int i = 0;
-  std::vector<int> test(15);
-  std::generate(begin(test), end(test), [=]() mutable { return i++; });
-  parallel_for_each(begin(test), end(test), &sqr);
+  cout << "Main thread id: " << this_thread::get_id() << endl;
+  vector<future<void>> futures;
+  for (int i = 0; i < 8; ++i) {
+    futures.emplace_back(async([] {
+      this_thread::sleep_for(chrono::seconds(1));
+      cout << this_thread::get_id() << " ";
+    }));
+  }
+  for_each(futures.begin(), futures.end(), [](future<void> & f) {
+    f.wait();
+  });
+  cout << endl;
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  packaged_task<int()> task(bind(&ackermann,3,11));
+  auto f = task.get_future();
+  task();
+  cout << f.get() << endl;
 }

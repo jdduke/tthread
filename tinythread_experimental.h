@@ -57,6 +57,7 @@ template < class >
 class future;
 
 ///////////////////////////////////////////////////////////////////////////
+// async_result
 
 template< class R >
 struct async_result {
@@ -68,7 +69,7 @@ struct async_result {
 
   std::unique_ptr<typename result<R>::type > mResult;
   mutable mutex      mResultLock;
-  condition_variable mResultCondition;
+  mutable condition_variable mResultCondition;
   bool               mException;
 
   bool ready() const { 
@@ -85,6 +86,7 @@ protected:
 };
 
 ///////////////////////////////////////////////////////////////////////////
+// packaged_task
 
 template< class R >
 class packaged_task<R()>
@@ -154,6 +156,7 @@ private:
   _TTHREAD_DISABLE_ASSIGNMENT(packaged_task);
 
   mutable mutex mLock;
+
   std::function<R()> mFunc;
   std::shared_ptr< async_result<R> > mResult;
 };
@@ -194,6 +197,7 @@ void tthread::packaged_task<R()>::operator()()
   }
 
   lock_guard<mutex> guardResult(result->mResultLock);
+  
   if(!result->mResult)
     result_helper<R>::store(result->mResult, mFunc);
 
@@ -250,29 +254,33 @@ protected:
 template< class R >
 typename R tthread::future<R>::get()
 {
+  std::shared_ptr< async_result<R> > pResult = mResult;
+  if (!pResult)
+    throw std::exception("invalid future");
+
   wait();
 
-  if (!valid())
+  const async_result<R>& result = *pResult;
+
+  if(result.mException || !result.mResult)
     throw std::exception("invalid future");
 
-  std::shared_ptr< async_result<R> > result = mResult;
-
-  lock_guard<mutex> guard(result->mResultLock);
-  if(result->mException || !result->mResult)
-    throw std::exception("invalid future");
-
-  return result_helper<R>::fetch(result->mResult.get());
+  return result_helper<R>::fetch(result.mResult.get());
 }
 
 template< class R >
 void tthread::future<R>::wait()
 {
-  std::shared_ptr< async_result<R> > result = mResult;
+  std::shared_ptr< async_result<R> > pResult = mResult;
+  if (!pResult)
+    return;
 
-  lock_guard<mutex> guard(result->mResultLock);
-  while (!result->mResult && !result->mException)
+  const async_result<R>& result = *pResult;
+
+  lock_guard<mutex> guard(result.mResultLock);
+  while (!result.mResult && !result.mException)
   {
-    result->mResultCondition.wait(result->mResultLock);
+    result.mResultCondition.wait(result.mResultLock);
   }
 }
 

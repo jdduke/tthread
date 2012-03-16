@@ -25,6 +25,7 @@ freely, subject to the following restrictions:
 #include <tinythread.h>
 #include <tinythread_experimental.h>
 
+#include <algorithm>
 #include <vector>
 
 using namespace std;
@@ -37,7 +38,9 @@ float nine()
 
 float sqr(int x)
 {
+#if defined(_DEBUG)
   cout << x << " -> " << x*x << endl;
+#endif
   return (float)x*x;
 }
 
@@ -70,6 +73,8 @@ int main() {
   auto f = async(&nine);
   cout << " Result is: " << f.get() << endl;
 
-  std::vector<int> test(5, 0);
+  int i = 0;
+  std::vector<int> test(15);
+  std::generate(begin(test), end(test), [=]() mutable { return i++; });
   parallel_for_each(begin(test), end(test), &sqr);
 }

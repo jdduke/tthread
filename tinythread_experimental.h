@@ -160,19 +160,23 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////
 
-template< class T, class F, class R >
-struct package_helper {
-  static void get(T& receiver, F& func) {
+template<class R>
+struct result_helper {
+  template< class T, class F >
+  static void store(T& receiver, F& func) {
     receiver.reset( new R( func() ) );
   }
+  static R fetch(R* r) { return *r; }
 };
 
-template< class T, class F >
-struct package_helper<T,F,void> {
-  static void get(T& receiver, F& func) {
+template<>
+struct result_helper<void> {
+  template< class T, class F >
+  static void store(T& receiver, F& func) {
     func();
     receiver.reset( new bool(true) );
   }
+  static void fetch(...) { }
 };
 
 template< class R >
@@ -191,8 +195,7 @@ void tthread::packaged_task<R()>::operator()()
 
   lock_guard<mutex> guardResult(result->mResultLock);
   if(!result->mResult)
-    package_helper<decltype(result->mResult), decltype(mFunc), R>::get(result->mResult, mFunc);
-    //result->mResult.reset( new R( mFunc() ) );
+    result_helper<R>::store(result->mResult, mFunc);
 
   result->mResultCondition.notify_all();
 }
@@ -219,7 +222,7 @@ void tthread::packaged_task<R()>::reset()
 template< class R >
 class future {
 public:
-  future()  { }
+  
   ~future() { }
   future(future<R>&& f) : mResult( f.mResult ) { }
   future& operator=(future&& other) { std::swap(mResult, other.mResult); }
@@ -234,6 +237,7 @@ public:
   template<class> friend class packaged_task;
 
 protected:
+  future() { }
   future(std::shared_ptr< async_result<R> >& result) : mResult(result) { }
 
   _TTHREAD_DISABLE_ASSIGNMENT(future)
@@ -244,11 +248,6 @@ protected:
 ///////////////////////////////////////////////////////////////////////////
 
 template< class R >
-struct get_helper { static R get(R* r) { return *r; } };
-template< >
-struct get_helper<void> { static void get(...) { } };
-
-template< class R >
 typename R tthread::future<R>::get()
 {
   wait();
@@ -256,11 +255,13 @@ typename R tthread::future<R>::get()
   if (!valid())
     throw std::exception("invalid future");
 
-  lock_guard<mutex> guard(mResult->mResultLock);
   std::shared_ptr< async_result<R> > result = mResult;
+
+  lock_guard<mutex> guard(result->mResultLock);
   if(result->mException || !result->mResult)
     throw std::exception("invalid future");
-  return get_helper<R>::get(result->mResult.get());
+
+  return result_helper<R>::fetch(result->mResult.get());
 }
 
 template< class R >
@@ -268,13 +269,10 @@ void tthread::future<R>::wait()
 {
   std::shared_ptr< async_result<R> > result = mResult;
 
-  if (result && !result->ready())
+  lock_guard<mutex> guard(result->mResultLock);
+  while (!result->mResult && !result->mException)
   {
-    lock_guard<mutex> guard(result->mResultLock);
-    while (!result->mResult && !result->mException)
-    {
-      result->mResultCondition.wait(result->mResultLock);
-    }
+    result->mResultCondition.wait(result->mResultLock);
   }
 }
 
@@ -295,40 +293,24 @@ auto async(F f) -> future<decltype(f())>
 }
 
 template< class F, class T >
-auto async(F f, T t) -> future<decltype(f(t))>
-{
+auto async(F f, T t) -> future<decltype(f(t))> {
   return async(std::bind(f, t));
 }
 
 template< class F, class T, class U >
-auto async(F f, T t, U u) -> future<decltype(f(t,u))>
-{
+auto async(F f, T t, U u) -> future<decltype(f(t,u))> {
   return async(std::bind(f, t, u));
 }
 
 template< class F, class T, class U, class V >
-auto async(F f, T t, U u, V v) -> future<decltype(f(t,u,v))>
-{
+auto async(F f, T t, U u, V v) -> future<decltype(f(t,u,v))> {
   return async(std::bind(f, t, u, v));
 }
 
-#if 0
-template < class Function >
-std::future< typename std::result_of< Function() >::type >
-async( Function&& f ) 
-{
-  return future();
+template< class F, class T, class U, class V, class W >
+auto async(F f, T t, U u, V v, W w) -> future<decltype(f(t,u,v,w))> {
+  return async(std::bind(f, t, u, v));
 }
-
-template < class Function, class T >
-std::future< typename std::result_of< Function(T) >::type >
-async( Function&& f, T&& t );
-
-template < class Function, class T, class U >
-std::future< typename std::result_of< Function(T,U) >::type >
-async( Function&& f, T&& t, U&& u );
-
-#endif
 
 }
 

@@ -567,7 +567,7 @@ class thread {
 
     _TTHREAD_DISABLE_ASSIGNMENT(thread)
 
-  private:
+  protected:
     native_handle_type mHandle;   ///< Thread handle.
     mutable mutex mDataMutex;     ///< Serializer for access to the thread private data.
     bool mNotAThread;             ///< True if this object is not a thread of execution.

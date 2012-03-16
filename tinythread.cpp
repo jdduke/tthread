@@ -156,6 +156,12 @@ struct _thread_start_info {
   thread_func mFunction; ///< Pointer to the function to be executed.
   void * mArg;         ///< Function argument for the thread function.
   thread * mThread;    ///< Pointer to the thread object.
+#if defined(_TTHREAD_FUNCTIONAL_)
+  //_thread_start_info(thread_func&& func, void * arg, thread * thread)
+    //: mFunction(std::move(func)), mArg(arg), mThread(thread) { }
+#endif
+  _thread_start_info(thread_func func, void * arg, thread * thread)
+    : mFunction(func), mArg(arg), mThread(thread) { }
 };
 
 // Thread wrapper function.
@@ -197,10 +203,7 @@ thread::thread(thread_func func, void * aArg)
 
   // Fill out the thread startup information (passed to the thread wrapper,
   // which will eventually free it)
-  _thread_start_info * ti = new _thread_start_info;
-  ti->mFunction = func;
-  ti->mArg = aArg;
-  ti->mThread = this;
+  _thread_start_info * ti = new _thread_start_info(func, aArg, this);
 
   // The thread is now alive
   mNotAThread = false;
@@ -229,10 +232,7 @@ thread::thread(thread_func&& func)
 
   // Fill out the thread startup information (passed to the thread wrapper,
   // which will eventually free it)
-  _thread_start_info * ti = new _thread_start_info;
-  ti->mFunction = std::move(func);
-  ti->mArg = NULL;
-  ti->mThread = this;
+  _thread_start_info * ti = new _thread_start_info(std::move(func), NULL, this);
 
   // The thread is now alive
   mNotAThread = false;

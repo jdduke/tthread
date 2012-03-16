@@ -25,18 +25,51 @@ freely, subject to the following restrictions:
 #include <tinythread.h>
 #include <tinythread_experimental.h>
 
+#include <vector>
+
 using namespace std;
 using namespace tthread;
 
 float nine()
 {
-  cout << "Nine!" << endl;
   return 9.f;
 }
 
-int main()
+float sqr(int x)
 {
-  auto f = async_future(&nine);
+  cout << x << " -> " << x*x << endl;
+  return (float)x*x;
+}
 
+template<typename Iterator,typename Func>
+void parallel_for_each(Iterator first,Iterator last,Func f) {
+  ptrdiff_t const range_length=last-first;
+  if(!range_length)
+    return;
+  if(range_length==1) {
+    f(*first);
+    return;
+  }
+
+  Iterator const mid=first+(range_length/2);
+
+  future<void> bgtask = async(&parallel_for_each<Iterator,Func>, first, mid, f);
+
+  try {
+    parallel_for_each(mid,last,f);
+  }
+  catch(...) {
+    bgtask.wait();
+    throw;
+  }
+
+  bgtask.get();
+}
+
+int main() {
+  auto f = async(&nine);
   cout << " Result is: " << f.get() << endl;
+
+  std::vector<int> test(5, 0);
+  parallel_for_each(begin(test), end(test), &sqr);
 }

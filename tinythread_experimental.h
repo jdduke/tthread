@@ -57,6 +57,9 @@ class packaged_task;
 template < class >
 class future;
 
+template< class F >
+auto async(F f) -> future<decltype(f())>;
+
 ///////////////////////////////////////////////////////////////////////////
 // async_result
 
@@ -105,8 +108,17 @@ protected:
 ///////////////////////////////////////////////////////////////////////////
 // packaged_task
 
+template< class T >
+class packaged_task_continuation {
+  virtual void operator()(T t) = 0;
+};
+template< >
+class packaged_task_continuation< void > {
+  virtual void operator()(void) = 0;
+};
+
 template< class R >
-class packaged_task<R()>
+class packaged_task<R(void)> : public packaged_task_continuation<void>
 {
 public:
   typedef R result_type;
@@ -219,8 +231,8 @@ void tthread::packaged_task<R()>::reset()
 }
 
 ///////////////////////////////////////////////////////////////////////////
-
 /// Future class.
+
 template< class R >
 class future {
 public:
@@ -236,7 +248,23 @@ public:
   R    get();
   void wait();
 
-  template<class> friend class packaged_task;
+  template< class F >
+  auto then( const F& f ) -> future<decltype(f())> {
+    
+    std::shared_ptr< async_result<R> > pResult = mResult;
+
+    if (!valid())
+      throw std::exception("invalid future");
+
+    lock_guard<mutex> guard(result.mResultLock);
+     
+    //if (is_ready())
+      return async(f, get());
+
+    // TODO: Create a continuation
+  }
+
+  template< class > friend class packaged_task;
 
 protected:
   future() { }

@@ -28,6 +28,7 @@ freely, subject to the following restrictions:
 
 #include "tinythread.h"
 #include "tinythread_t.h"
+#include "fast_mutex.h"
 
 //#if !defined(_TTHREAD_FUNCTIONAL_)
 //# error std::function must exist
@@ -50,6 +51,9 @@ freely, subject to the following restrictions:
 #endif
 
 namespace tthread {
+
+typedef fast_mutex future_mutex;
+typedef lock_guard<future_mutex> lock;
 
 template< class >
 class packaged_task;
@@ -88,12 +92,12 @@ template< class R >
 struct async_result {
 
   std::unique_ptr<typename result_helper<R>::type > mResult;
-  mutable mutex      mResultLock;
+  bool                       mException;
+  mutable future_mutex       mResultLock;
   mutable condition_variable mResultCondition;
-  bool               mException;
 
   bool ready() const {
-    lock_guard<mutex> guard(mResultLock);
+    lock guard(mResultLock);
     return mResult || mException;
   }
 
@@ -151,7 +155,7 @@ public:
 
   void swap(packaged_task&& other)
   {
-    lock_guard<mutex> guard(mLock);
+    lock guard(mLock);
     std::swap(mFunc,   other.mFunc);
     std::swap(mResult, other.mResult);
   }
@@ -161,13 +165,13 @@ public:
 
   operator bool() const
   {
-    lock_guard<mutex> guard(mLock);
+    lock guard(mLock);
     return !!mFunc;
   }
 
   future<R> get_future()
   {
-    lock_guard<mutex> guard(mLock);
+    lock guard(mLock);
     if (!mResult)
       mResult.reset( new async_result<R>() );
     return future<R>(mResult);
@@ -184,9 +188,8 @@ public:
 private:
   _TTHREAD_DISABLE_ASSIGNMENT(packaged_task);
 
-  mutable mutex mLock;
-
-  std::function<R()> mFunc;
+  mutable future_mutex mLock;
+  std::function<R()>   mFunc;
   std::shared_ptr< async_result<R> > mResult;
 };
 
@@ -200,13 +203,13 @@ void tthread::packaged_task<R()>::operator()()
 
   std::shared_ptr< async_result<R> > result;
   {
-    lock_guard<mutex> guard(mLock);
+    lock guard(mLock);
     if (!mResult)
       mResult.reset( new async_result<R>() );
     result = mResult;
   }
 
-  lock_guard<mutex> guardResult(result->mResultLock);
+  lock guardResult(result->mResultLock);
 
   if(!result->mResult)
     result_helper<R>::store(result->mResult, mFunc);
@@ -217,12 +220,12 @@ void tthread::packaged_task<R()>::operator()()
 template< class R >
 void tthread::packaged_task<R()>::reset()
 {
-  lock_guard<mutex> guard(mLock);
+  lock guard(mLock);
 
 #if 0
   if (mResult && !mResult->ready())
   {
-    lock_guard<mutex> guardResult(mResult->mResultLock);
+    lock guardResult(mResult->mResultLock);
     mResult->mException = true;
   }
 #endif
@@ -257,7 +260,7 @@ public:
       throw std::exception("invalid future");
 
     // TODO: Create a continuation
-    //lock_guard<mutex> guard(pResult->mResultLock);
+    //lock guard(pResult->mResultLock);
     //if (is_ready())
     return async(f, get());
   }
@@ -301,7 +304,7 @@ void tthread::future<R>::wait()
 
   const async_result<R>& result = *pResult;
 
-  lock_guard<mutex> guard(result.mResultLock);
+  lock guard(result.mResultLock);
   while (!result.mResult && !result.mException)
   {
     result.mResultCondition.wait(result.mResultLock);

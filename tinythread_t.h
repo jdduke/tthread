@@ -34,6 +34,8 @@ freely, subject to the following restrictions:
 #include <process.h>
 #endif
 
+#include <memory>
+
 /// @file
 namespace tthread {
 
@@ -42,7 +44,7 @@ class threadt : public thread {
   public:
 
     template< class thread_func_t >
-    threadt(thread_func_t&& func) : thread() 
+    threadt(thread_func_t&& func) : thread()
     {
       // Serialize access to this thread structure
       lock_guard<mutex> guard(mDataMutex);

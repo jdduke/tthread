@@ -29,13 +29,14 @@ freely, subject to the following restrictions:
 #include "tinythread.h"
 #include "tinythread_t.h"
 
-#if !defined(_TTHREAD_FUNCTIONAL_)
-# error std::function must exist
-#else
+//#if !defined(_TTHREAD_FUNCTIONAL_)
+//# error std::function must exist
+#if 1
 #define _TTHREAD_EXPERIMENTAL_
 #endif
 
 #include <memory>
+#include <stdexcept>
 
 // Macro for disabling assignments of objects.
 #ifdef _TTHREAD_CPP0X_PARTIAL_
@@ -59,20 +60,36 @@ class future;
 ///////////////////////////////////////////////////////////////////////////
 // async_result
 
+template<class R>
+struct result_helper {
+  typedef R type;
+  template< class T, class F >
+  static void store(T& receiver, F& func) {
+    receiver.reset( new R( func() ) );
+  }
+  static R fetch(R* r) { return *r; }
+};
+
+template<>
+struct result_helper<void> {
+  typedef bool type;
+  template< class T, class F >
+  static void store(T& receiver, F& func) {
+    func();
+    receiver.reset( new bool(true) );
+  }
+  static void fetch(...) { }
+};
+
 template< class R >
 struct async_result {
 
-  template< class T >
-  struct result { typedef T type; };
-  template< >
-  struct result<void> { typedef bool type; };
-
-  std::unique_ptr<typename result<R>::type > mResult;
+  std::unique_ptr<typename result_helper<R>::type > mResult;
   mutable mutex      mResultLock;
   mutable condition_variable mResultCondition;
   bool               mException;
 
-  bool ready() const { 
+  bool ready() const {
     lock_guard<mutex> guard(mResultLock);
     return mResult || mException;
   }
@@ -114,7 +131,7 @@ public:
     *this = std::move(other);
   }
 
-  packaged_task& operator=(packaged_task&& other) 
+  packaged_task& operator=(packaged_task&& other)
   {
     swap( std::move(other) );
     return *this;
@@ -130,10 +147,10 @@ public:
   ///////////////////////////////////////////////////////////////////////////
   // result retrieval
 
-  operator bool() const 
-  { 
+  operator bool() const
+  {
     lock_guard<mutex> guard(mLock);
-    return mFunc; 
+    return !!mFunc;
   }
 
   future<R> get_future()
@@ -163,25 +180,6 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////
 
-template<class R>
-struct result_helper {
-  template< class T, class F >
-  static void store(T& receiver, F& func) {
-    receiver.reset( new R( func() ) );
-  }
-  static R fetch(R* r) { return *r; }
-};
-
-template<>
-struct result_helper<void> {
-  template< class T, class F >
-  static void store(T& receiver, F& func) {
-    func();
-    receiver.reset( new bool(true) );
-  }
-  static void fetch(...) { }
-};
-
 template< class R >
 void tthread::packaged_task<R()>::operator()()
 {
@@ -197,7 +195,7 @@ void tthread::packaged_task<R()>::operator()()
   }
 
   lock_guard<mutex> guardResult(result->mResultLock);
-  
+
   if(!result->mResult)
     result_helper<R>::store(result->mResult, mFunc);
 
@@ -226,14 +224,14 @@ void tthread::packaged_task<R()>::reset()
 template< class R >
 class future {
 public:
-  
+
   ~future() { }
   future(future<R>&& f) : mResult( f.mResult ) { }
   future& operator=(future&& other) { std::swap(mResult, other.mResult); }
-  
+
   bool valid() const     { return mResult; }
-  bool is_ready() const  { return valid() && result->ready(); }
-  bool has_value() const { is_ready(); }
+  bool is_ready() const  { return valid() && mResult->ready(); }
+  bool has_value() const { return is_ready(); }
 
   R    get();
   void wait();
@@ -252,18 +250,18 @@ protected:
 ///////////////////////////////////////////////////////////////////////////
 
 template< class R >
-typename R tthread::future<R>::get()
+R tthread::future<R>::get()
 {
   std::shared_ptr< async_result<R> > pResult = mResult;
   if (!pResult)
-    throw std::exception("invalid future");
+    throw std::runtime_error("invalid future");
 
   wait();
 
   const async_result<R>& result = *pResult;
 
   if(result.mException || !result.mResult)
-    throw std::exception("invalid future");
+    throw std::runtime_error("invalid future");
 
   return result_helper<R>::fetch(result.mResult.get());
 }

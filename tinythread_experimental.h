@@ -250,18 +250,16 @@ public:
 
   template< class F >
   auto then( const F& f ) -> future<decltype(f())> {
-    
+
     std::shared_ptr< async_result<R> > pResult = mResult;
 
     if (!valid())
       throw std::exception("invalid future");
 
-    lock_guard<mutex> guard(result.mResultLock);
-     
-    //if (is_ready())
-      return async(f, get());
-
     // TODO: Create a continuation
+    //lock_guard<mutex> guard(pResult->mResultLock);
+    //if (is_ready())
+    return async(f, get());
   }
 
   template< class > friend class packaged_task;

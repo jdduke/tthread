@@ -53,9 +53,21 @@ int main() {
   cout << endl;
 
   ///////////////////////////////////////////////////////////////////////////
-
+  
   packaged_task<int()> task(bind(&ackermann,3,11));
   auto f = task.get_future();
   task();
-  cout << f.get() << endl;
+  cout << "Ackerman(3,11) = " << f.get() << endl;
+
+  ///////////////////////////////////////////////////////////////////////////
+
+  vector<future<int>> futures2;
+  for (int i = 0; i < 8; ++i) {
+    futures2.emplace_back(async(&ackermann,3,11));
+  }
+  for_each(futures2.begin(), futures2.end(), [=](future<int> & f) {
+    std::cout << "Ackerman(3,11) = " << f.get() << endl;
+  });
+  cout << endl;
+
 }

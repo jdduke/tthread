@@ -21,15 +21,26 @@ freely, subject to the following restrictions:
     distribution.
 */
 
-#include <iostream>
+#define USE_TTHREAD 1
+#if USE_TTHREAD
 #include <tinythread.h>
 #include <tinythread_experimental.h>
+#else
+#include <future>
+#endif
 
 #include <algorithm>
+#include <iostream>
 #include <vector>
 
 using namespace std;
+
+#if USE_TTHREAD
 using namespace tthread;
+#define SYNC_FLAGS
+#else
+#define SYNC_FLAGS std::launch::async,
+#endif
 
 int ackermann(int m, int n) {
   if(m==0) return n+1;
@@ -42,7 +53,7 @@ int main() {
   cout << "Main thread id: " << this_thread::get_id() << endl;
   vector<future<void>> futures;
   for (int i = 0; i < 8; ++i) {
-    futures.emplace_back(async([] {
+    futures.emplace_back(async(SYNC_FLAGS [] {
       this_thread::sleep_for(chrono::seconds(1));
       cout << this_thread::get_id() << " ";
     }));
@@ -53,7 +64,7 @@ int main() {
   cout << endl;
 
   ///////////////////////////////////////////////////////////////////////////
-  
+
   packaged_task<int()> task(bind(&ackermann,3,11));
   auto f = task.get_future();
   task();
@@ -63,7 +74,7 @@ int main() {
 
   vector<future<int>> futures2;
   for (int i = 0; i < 8; ++i) {
-    futures2.emplace_back(async(&ackermann,3,11));
+    futures2.emplace_back(async(SYNC_FLAGS &ackermann,3,11));
   }
   for_each(futures2.begin(), futures2.end(), [=](future<int> & f) {
     std::cout << "Ackerman(3,11) = " << f.get() << endl;

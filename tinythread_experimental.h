@@ -29,14 +29,14 @@ freely, subject to the following restrictions:
 #include "tinythread.h"
 #include "tinythread_t.h"
 
-//#if !defined(_TTHREAD_FUNCTIONAL_)
-//# error std::function must exist
-#if 1
-#define _TTHREAD_EXPERIMENTAL_
-#endif
-
 #include <memory>
 #include <stdexcept>
+
+#define _TTHREAD_EXPERIMENTAL_
+
+#if !defined(_MSC_VER)
+#define _TTHREAD_VARIADIC_
+#endif
 
 // Macro for disabling assignments of objects.
 #ifdef _TTHREAD_CPP0X_PARTIAL_
@@ -117,9 +117,123 @@ class packaged_task_continuation< void > {
   virtual void operator()(void) = 0;
 };
 
+#if defined(_TTHREAD_VARIADIC_)
+
 template< class R >
-class packaged_task<R(void)> : public packaged_task_continuation<void>
+struct result_helper_v {
+  template<class T, class F, class... Args>
+  static void store(T& receiver, F& func, Args&&... args) {
+    receiver.reset( new R( func( std::forward<Args...>(args)... ) ) );
+  }
+};
+
+template< >
+struct result_helper_v<void> {
+  template<class T, class F, class... Args>
+  static void store(T& receiver, F& func, Args&&... args) {
+    func( std::forward<Args...>(args)... );
+    receiver.reset( new bool(true) );
+  }
+};
+
+template< class R, class... Args >
+class packaged_task<R(Args...)> : public packaged_task_continuation<void> {
+public:
+  typedef R result_type;
+
+  ///////////////////////////////////////////////////////////////////////////
+  // construction and destruction
+
+  packaged_task() { }
+  ~packaged_task() { }
+
+  explicit packaged_task(R(*f)(Args...)) : mFunc( f ) { }
+  template <class F>
+  explicit packaged_task(const F& f)     : mFunc( f ) { }
+  template <class F>
+  explicit packaged_task(F&& f)          : mFunc( std::move( f ) ) { }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // move support
+
+  packaged_task(packaged_task&& other) {
+    *this = std::move(other);
+  }
+
+  packaged_task& operator=(packaged_task&& other) {
+    swap( std::move(other) );
+    return *this;
+  }
+
+  void swap(packaged_task&& other) {
+    lock_guard<mutex> guard(mLock);
+    std::swap(mFunc,   other.mFunc);
+    std::swap(mResult, other.mResult);
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // result retrieval
+
+  operator bool() const {
+    lock_guard<mutex> guard(mLock);
+    return !!mFunc;
+  }
+
+  future<R> get_future() {
+    lock_guard<mutex> guard(mLock);
+    if (!mResult)
+      mResult.reset( new async_result<R>() );
+    return future<R>(mResult);
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // execution
+
+  void operator()(void*) { (*this)(); }
+  void operator()(Args&&...);
+
+  void reset() {
+    lock_guard<mutex> guard(mLock);
+    mResult.reset( );
+  }
+
+private:
+  _TTHREAD_DISABLE_ASSIGNMENT(packaged_task);
+
+  mutable mutex mLock;
+  std::function<R(Args...)> mFunc;
+  std::shared_ptr< async_result<R> > mResult;
+};
+
+
+///////////////////////////////////////////////////////////////////////////
+
+template< class R, class... Args >
+void tthread::packaged_task<R(Args...)>::operator()(Args&&... args)
 {
+  if (!(*this))
+    return;
+
+  std::shared_ptr< async_result<R> > result;
+  {
+    lock_guard<mutex> guard(mLock);
+    if (!mResult)
+      mResult.reset( new async_result<R>() );
+    result = mResult;
+  }
+
+  lock_guard<mutex> guardResult(result->mResultLock);
+
+  if(!result->mResult)
+    result_helper_v<R>::store(result->mResult, mFunc, std::forward<Args...>(args)... );
+
+  result->mResultCondition.notify_all();
+}
+
+#else
+
+template< class R >
+class packaged_task<R(void)> : public packaged_task_continuation<void> {
 public:
   typedef R result_type;
 
@@ -138,19 +252,16 @@ public:
   ///////////////////////////////////////////////////////////////////////////
   // move support
 
-  packaged_task(packaged_task&& other)
-  {
+  packaged_task(packaged_task&& other) {
     *this = std::move(other);
   }
 
-  packaged_task& operator=(packaged_task&& other)
-  {
+  packaged_task& operator=(packaged_task&& other) {
     swap( std::move(other) );
     return *this;
   }
 
-  void swap(packaged_task&& other)
-  {
+  void swap(packaged_task&& other) {
     lock_guard<mutex> guard(mLock);
     std::swap(mFunc,   other.mFunc);
     std::swap(mResult, other.mResult);
@@ -159,14 +270,12 @@ public:
   ///////////////////////////////////////////////////////////////////////////
   // result retrieval
 
-  operator bool() const
-  {
+  operator bool() const {
     lock_guard<mutex> guard(mLock);
     return !!mFunc;
   }
 
-  future<R> get_future()
-  {
+  future<R> get_future() {
     lock_guard<mutex> guard(mLock);
     if (!mResult)
       mResult.reset( new async_result<R>() );
@@ -179,7 +288,10 @@ public:
   void operator()(void*) { (*this)(); }
   void operator()();
 
-  void reset();
+  void reset() {
+    lock_guard<mutex> guard(mLock);
+    mResult.reset( );
+  }
 
 private:
   _TTHREAD_DISABLE_ASSIGNMENT(packaged_task);
@@ -217,18 +329,9 @@ void tthread::packaged_task<R()>::operator()()
 template< class R >
 void tthread::packaged_task<R()>::reset()
 {
-  lock_guard<mutex> guard(mLock);
-
-#if 0
-  if (mResult && !mResult->ready())
-  {
-    lock_guard<mutex> guardResult(mResult->mResultLock);
-    mResult->mException = true;
-  }
-#endif
-
-  mResult.reset( );
 }
+
+#endif
 
 ///////////////////////////////////////////////////////////////////////////
 /// Future class.

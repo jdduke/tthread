@@ -93,6 +93,7 @@ struct async_result {
 
   std::unique_ptr<typename result_helper<R>::type > mResult;
   bool                       mException;
+  bool                       mProcessed;
   mutable future_mutex       mResultLock;
   mutable condition_variable mResultCondition;
 
@@ -101,10 +102,10 @@ struct async_result {
     return mResult || mException;
   }
 
-  template<class> friend class packaged_task;
+  template<class,class> friend class packaged_task_impl;
 
 protected:
-  async_result() : mException(false) { }
+  async_result() : mException(false), mProcessed(false) { }
 
   _TTHREAD_DISABLE_ASSIGNMENT(async_result);
 };
@@ -236,40 +237,41 @@ void tthread::packaged_task<R(Args...)>::operator()(Args&&... args)
 
 #else
 
-template< class R >
-class packaged_task<R(void)> : public packaged_task_continuation<void> {
+template< class R, class Arg >
+class packaged_task_impl : public packaged_task_continuation<Arg> {
 public:
-  typedef R result_type;
+  typedef R   result_type;
+  typedef Arg arg_type;
+  typedef std::shared_ptr< async_result<result_type> > async_result_ptr;
 
   ///////////////////////////////////////////////////////////////////////////
   // construction and destruction
 
-  packaged_task() { }
-  ~packaged_task() { }
+  packaged_task_impl() { }
+  ~packaged_task_impl() { }
 
-  explicit packaged_task(R(*f)())    : mFunc( f ) { }
+  explicit packaged_task_impl(R(*f)(Arg)) : mFunc( f ) { }
   template <class F>
-  explicit packaged_task(const F& f) : mFunc( f ) { }
+  explicit packaged_task_impl(const F& f) : mFunc( f ) { }
   template <class F>
-  explicit packaged_task(F&& f)      : mFunc( std::move( f ) ) { }
+  explicit packaged_task_impl(F&& f)      : mFunc( std::move( f ) ) { }
 
   ///////////////////////////////////////////////////////////////////////////
   // move support
 
-  packaged_task(packaged_task&& other) {
+  packaged_task_impl(packaged_task_impl&& other) {
     *this = std::move(other);
   }
 
-  packaged_task& operator=(packaged_task&& other) {
+  packaged_task_impl& operator=(packaged_task_impl&& other) {
     swap( std::move(other) );
     return *this;
   }
 
-  void swap(packaged_task&& other)
-  {
+  void swap(packaged_task_impl&& other) {
     lock guard(mLock);
-    std::swap(mFunc,   other.mFunc);
-    std::swap(mResult, other.mResult);
+    std::swap(mFunc,      other.mFunc);
+    std::swap(mResult,    other.mResult);
   }
 
   ///////////////////////////////////////////////////////////////////////////
@@ -287,19 +289,26 @@ public:
     return future<R>(mResult);
   }
 
-  ///////////////////////////////////////////////////////////////////////////
-  // execution
-
-  void operator()(void*) { (*this)(); }
-  void operator()();
+  async_result_ptr& process(async_result_ptr& result) {
+    if (*this) {
+      lock guard(mLock);
+      if (!mResult)
+        mResult.reset( new async_result<R>() );
+      if (!mResult->mProcessed) {
+        result = mResult;
+        result->mProcessed = true;
+      }
+    }
+    return result;
+  }
 
   void reset() {
     lock guard(mLock);
     mResult.reset( );
   }
 
-private:
-  _TTHREAD_DISABLE_ASSIGNMENT(packaged_task);
+protected:
+  _TTHREAD_DISABLE_ASSIGNMENT(packaged_task_impl);
 
   mutable future_mutex mLock;
   std::function<R()>   mFunc;
@@ -309,25 +318,95 @@ private:
 ///////////////////////////////////////////////////////////////////////////
 
 template< class R >
-void tthread::packaged_task<R()>::operator()()
-{
-  if (!(*this))
-    return;
+class packaged_task<R()> : public packaged_task_impl<R,void> {
+public:
 
-  std::shared_ptr< async_result<R> > result;
-  {
-    lock guard(mLock);
-    if (!mResult)
-      mResult.reset( new async_result<R>() );
-    result = mResult;
+  ///////////////////////////////////////////////////////////////////////////
+  // construction and destruction
+
+  typedef packaged_task_impl<R,void> base;
+
+  explicit packaged_task(R(*f)())    : base( f ) { }
+  template <class F>
+  explicit packaged_task(const F& f) : base( f ) { }
+  template <class F>
+  explicit packaged_task(F&& f)      : base( std::move( f ) ) { }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // move support
+
+  packaged_task(packaged_task&& other) {
+    *this = std::move(other);
   }
 
-  lock guardResult(result->mResultLock);
+  packaged_task& operator=(packaged_task&& other) {
+    swap( std::move(other) );
+    return *this;
+  }
 
-  if(!result->mResult)
+  void operator()(void*) { operator()(); }
+  void operator()();
+
+private:
+  _TTHREAD_DISABLE_ASSIGNMENT(packaged_task);
+};
+
+template< class R >
+void tthread::packaged_task<R()>::operator()() {
+  std::shared_ptr< async_result<R> > result;
+  if (process(result)) {
     result_helper<R>::store(result->mResult, mFunc);
+    lock guardResult(result->mResultLock);
+    result->mResultCondition.notify_all();
+  }
+}
 
-  result->mResultCondition.notify_all();
+///////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////
+
+template< class R, class Arg >
+class packaged_task<R(Arg)> : public packaged_task_impl<R,Arg> {
+public:
+
+  ///////////////////////////////////////////////////////////////////////////
+  // construction and destruction
+
+  typedef packaged_task_impl<R,Arg> base;
+
+  explicit packaged_task(R(*f)(Arg)) : base( std::move( f ) ) { }
+  template <class F>
+  explicit packaged_task(const F& f) : base( std::move( f ) ) { }
+  template <class F>
+  explicit packaged_task(F&& f)      : base( std::move( f ) ) { }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // move support
+
+  packaged_task(packaged_task&& other) {
+    *this = std::move(other);
+  }
+
+  packaged_task& operator=(packaged_task&& other) {
+    swap( std::move(other) );
+    return *this;
+  }
+
+  void operator()(void* arg) { operator()((Arg)arg); }
+  void operator()(Arg);
+
+private:
+  _TTHREAD_DISABLE_ASSIGNMENT(packaged_task);
+};
+
+template< class R, class Arg >
+void tthread::packaged_task<R(Arg)>::operator()(Arg arg) {
+  std::shared_ptr< async_result<R> > result;
+  if (process(result)) {
+    result_helper<R>::store(result->mResult, mFunc, arg);
+    lock guardResult(result->mResultLock);
+    result->mResultCondition.notify_all();
+  }
 }
 
 #endif
@@ -365,6 +444,7 @@ public:
   }
 
   template< class > friend class packaged_task;
+  template< class, class > friend class packaged_task_impl;
 
 protected:
   future() { }

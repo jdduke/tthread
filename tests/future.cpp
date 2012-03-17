@@ -65,7 +65,7 @@ int main() {
 
   ///////////////////////////////////////////////////////////////////////////
 
-  packaged_task<int()> task(bind(&ackermann,3,11));
+  packaged_task<int(void)> task(bind(&ackermann,3,11));
   auto f = task.get_future();
   task();
   cout << "Ackerman(3,11) = " << f.get() << endl;

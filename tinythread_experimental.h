@@ -21,8 +21,8 @@ freely, subject to the following restrictions:
     distribution.
 */
 
-#ifndef _TINYTHREAD_EXPERIMENTAL_2_H_
-#define _TINYTHREAD_EXPERIMENTAL_2_H_
+#ifndef _TINYTHREAD_EXPERIMENTAL_H_
+#define _TINYTHREAD_EXPERIMENTAL_H_
 
 /// @file
 
@@ -623,6 +623,15 @@ auto async(F f) -> future<decltype(f())> {
   return async(launch::any, f);
 }
 
+#if defined(_TTHREAD_VARIADIC_)
+
+template< typename F, typename... Args >
+auto async(F f, Args&&... args) -> future<decltype(f(args...))> {
+  return async(std::bind(f, std::move(args)...));
+}
+
+#else
+
 template< typename F, typename T >
 auto async(F f, T&& t) -> future<decltype(f(t))> {
   return async(std::bind(f, std::move(t)));
@@ -643,8 +652,10 @@ auto async(F f, T t, U u, V v, W w) -> future<decltype(f(t,u,v,w))> {
   return async(std::bind(f, t, u, v));
 }
 
+#endif
+
 }
 
 #undef _TTHREAD_DISABLE_ASSIGNMENT
 
-#endif // _TINYTHREAD_EXPERIMENTAL_2_H_
+#endif // _TINYTHREAD_EXPERIMENTAL_H_

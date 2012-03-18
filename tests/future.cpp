@@ -81,4 +81,13 @@ int main() {
   });
   cout << endl;
 
+  ///////////////////////////////////////////////////////////////////////////
+
+  try {
+    std::cout << "f(g(5)) = 5*(1*(5)) = " <<
+      async([]() { return 5; }).then([](int x) { return x * 5;}).get();//then([](int x) { return x * 5; }).get();
+  } catch (std::runtime_error& e) {
+    std::cout << e.what() << std::endl;
+  }
+  
 }

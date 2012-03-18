@@ -48,50 +48,102 @@ freely, subject to the following restrictions:
 #define _TTHREAD_DISABLE_ASSIGNMENT(name) \
   name(const name&); \
   name& operator=(const name&);
+namespace std {
+  template <typename T>
+  typename std::add_rvalue_reference<T>::type declval();
+}
 #endif
 
 namespace tthread {
 
+///////////////////////////////////////////////////////////////////////////
+// typedefs
 typedef mutex future_mutex;
 typedef lock_guard<future_mutex> lock;
 
-template< class >
+///////////////////////////////////////////////////////////////////////////
+// forward declarations
+
+template< typename >
 class packaged_task;
 
-template < class >
+template< typename >
+class packaged_task_continuation;
+
+template< typename >
 class future;
 
-template< class F >
+template< typename F >
 auto async(F f) -> future<decltype(f())>;
+
+///////////////////////////////////////////////////////////////////////////
+// launch
+class launch {
+  enum { 
+    async,
+    deferred,
+    sync = deferred,
+    any  = async | deferred 
+  };
+};
 
 ///////////////////////////////////////////////////////////////////////////
 // async_result
 
-template<class R>
+template< typename R >
 struct result_helper {
   typedef R type;
-  template< class T, class F >
+
+  template< typename T, typename F >
   static void store(T& receiver, F& func) {
     receiver.reset( new R( func() ) );
   }
-  static R fetch(R* r) { return *r; }
+  template< typename T, typename F, typename Arg >
+  static void store(T& receiver, F& func, Arg&& arg) {
+    receiver.reset( new R( func(std::move(arg)) ) );
+  }
+
+  static R fetch(R* r) { 
+    return *r; 
+  }
+
+  template< typename F >
+  static void run(F& f, R& r) {
+    f(r);
+  }
 };
 
 template<>
 struct result_helper<void> {
   typedef bool type;
-  template< class T, class F >
+
+  template< typename T, typename F >
   static void store(T& receiver, F& func) {
     func();
     receiver.reset( new bool(true) );
   }
-  static void fetch(...) { }
+  template< typename T, typename F, typename Arg >
+  static void store(T& receiver, F& func, Arg&& arg) {
+    func( std::move(arg) );
+    receiver.reset( new bool(true) );
+  }
+
+  static void fetch(...) {
+
+  }
+
+  template< typename F >
+  static void run(F& f, ...) {
+    f();
+  }
 };
 
-template< class R >
+template< typename R >
 struct async_result {
 
-  std::unique_ptr<typename result_helper<R>::type > mResult;
+  std::unique_ptr< typename result_helper<R>::type > mResult;
+  std::unique_ptr< packaged_task_continuation<R> >   mContinuation;
+
   bool                       mException;
   bool                       mProcessed;
   mutable future_mutex       mResultLock;
@@ -102,7 +154,7 @@ struct async_result {
     return mResult || mException;
   }
 
-  template<class,class> friend class packaged_task_impl;
+  template<typename,typename> friend class packaged_task_impl;
 
 protected:
   async_result() : mException(false), mProcessed(false) { }
@@ -113,20 +165,18 @@ protected:
 ///////////////////////////////////////////////////////////////////////////
 // packaged_task
 
-template< class T >
-class packaged_task_continuation {
-  virtual void operator()(T t) = 0;
-};
-template< >
-class packaged_task_continuation< void > {
-  virtual void operator()(void) = 0;
-};
-
 #if defined(_TTHREAD_VARIADIC_)
 
-template< class R >
+template< typename... Args >
+class packaged_task_continuation {
+public:
+  virtual void operator()(Args...) = 0;
+  virtual ~packaged_task_continuation() { }
+};
+
+template< typename R >
 struct result_helper_v {
-  template<class T, class F, class... Args>
+  template< typename T, typename F, typename... Args>
   static void store(T& receiver, F& func, Args&&... args) {
     receiver.reset( new R( func( std::forward<Args...>(args)... ) ) );
   }
@@ -134,15 +184,15 @@ struct result_helper_v {
 
 template< >
 struct result_helper_v<void> {
-  template<class T, class F, class... Args>
+  template< typename T, typename F, typename... Args>
   static void store(T& receiver, F& func, Args&&... args) {
     func( std::forward<Args...>(args)... );
     receiver.reset( new bool(true) );
   }
 };
 
-template< class R, class... Args >
-class packaged_task<R(Args...)> : public packaged_task_continuation<void> {
+template< typename R, typename... Args >
+class packaged_task<R(Args...)> : public packaged_task_continuation<Args...> {
 public:
   typedef R result_type;
 
@@ -153,9 +203,9 @@ public:
   ~packaged_task() { }
 
   explicit packaged_task(R(*f)(Args...)) : mFunc( f ) { }
-  template <class F>
+  template < typename F >
   explicit packaged_task(const F& f)     : mFunc( f ) { }
-  template <class F>
+  template < typename F >
   explicit packaged_task(F&& f)          : mFunc( std::move( f ) ) { }
 
   ///////////////////////////////////////////////////////////////////////////
@@ -213,7 +263,7 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////
 
-template< class R, class... Args >
+template< typename R, typename... Args >
 void tthread::packaged_task<R(Args...)>::operator()(Args&&... args)
 {
   if (!(*this))
@@ -237,7 +287,20 @@ void tthread::packaged_task<R(Args...)>::operator()(Args&&... args)
 
 #else
 
-template< class R, class Arg >
+template< typename Arg >
+class packaged_task_continuation {
+public:
+  virtual void operator()(Arg) = 0;
+  virtual ~packaged_task_continuation() { }
+};
+template< >
+class packaged_task_continuation< void > {
+public:
+  virtual void operator()(void) = 0;
+  virtual ~packaged_task_continuation() { }
+};
+
+template< typename R, typename Arg >
 class packaged_task_impl : public packaged_task_continuation<Arg> {
 public:
   typedef R   result_type;
@@ -251,9 +314,9 @@ public:
   ~packaged_task_impl() { }
 
   explicit packaged_task_impl(R(*f)(Arg)) : mFunc( f ) { }
-  template <class F>
+  template < typename F >
   explicit packaged_task_impl(const F& f) : mFunc( f ) { }
-  template <class F>
+  template < typename F >
   explicit packaged_task_impl(F&& f)      : mFunc( std::move( f ) ) { }
 
   ///////////////////////////////////////////////////////////////////////////
@@ -310,14 +373,14 @@ public:
 protected:
   _TTHREAD_DISABLE_ASSIGNMENT(packaged_task_impl);
 
-  mutable future_mutex mLock;
-  std::function<R()>   mFunc;
+  mutable future_mutex               mLock;
+  std::function<R(Arg)>              mFunc;
   std::shared_ptr< async_result<R> > mResult;
 };
 
 ///////////////////////////////////////////////////////////////////////////
 
-template< class R >
+template< typename R >
 class packaged_task<R()> : public packaged_task_impl<R,void> {
 public:
 
@@ -326,11 +389,11 @@ public:
 
   typedef packaged_task_impl<R,void> base;
 
-  explicit packaged_task(R(*f)())    : base( f ) { }
-  template <class F>
-  explicit packaged_task(const F& f) : base( f ) { }
-  template <class F>
-  explicit packaged_task(F&& f)      : base( std::move( f ) ) { }
+  explicit packaged_task(R(*f)(void)) : base( f ) { }
+  template < typename F >
+  explicit packaged_task(const F& f)  : base( f ) { }
+  template < typename F >
+  explicit packaged_task(F&& f)       : base( std::move( f ) ) { }
 
   ///////////////////////////////////////////////////////////////////////////
   // move support
@@ -351,21 +414,21 @@ private:
   _TTHREAD_DISABLE_ASSIGNMENT(packaged_task);
 };
 
-template< class R >
+template< typename R >
 void tthread::packaged_task<R()>::operator()() {
   std::shared_ptr< async_result<R> > result;
   if (process(result)) {
     result_helper<R>::store(result->mResult, mFunc);
     lock guardResult(result->mResultLock);
     result->mResultCondition.notify_all();
+    if (result->mResult && result->mContinuation)
+      result_helper<R>::run(*result->mContinuation, *result->mResult);
   }
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
-///////////////////////////////////////////////////////////////////////////
-
-template< class R, class Arg >
+template< typename R, typename Arg >
 class packaged_task<R(Arg)> : public packaged_task_impl<R,Arg> {
 public:
 
@@ -375,9 +438,9 @@ public:
   typedef packaged_task_impl<R,Arg> base;
 
   explicit packaged_task(R(*f)(Arg)) : base( std::move( f ) ) { }
-  template <class F>
+  template < typename F >
   explicit packaged_task(const F& f) : base( std::move( f ) ) { }
-  template <class F>
+  template < typename F >
   explicit packaged_task(F&& f)      : base( std::move( f ) ) { }
 
   ///////////////////////////////////////////////////////////////////////////
@@ -399,7 +462,7 @@ private:
   _TTHREAD_DISABLE_ASSIGNMENT(packaged_task);
 };
 
-template< class R, class Arg >
+template< typename R, typename Arg >
 void tthread::packaged_task<R(Arg)>::operator()(Arg arg) {
   std::shared_ptr< async_result<R> > result;
   if (process(result)) {
@@ -414,7 +477,7 @@ void tthread::packaged_task<R(Arg)>::operator()(Arg arg) {
 ///////////////////////////////////////////////////////////////////////////
 /// Future class.
 
-template< class R >
+template< typename R >
 class future {
 public:
 
@@ -429,22 +492,30 @@ public:
   R    get();
   void wait();
 
-  template< class F >
-  auto then( const F& f ) -> future<decltype(f())> {
-
+  template< typename F >
+  auto then( F f ) -> future<decltype(f(std::declval<R>()))> {
     std::shared_ptr< async_result<R> > pResult = mResult;
-
-    if (!valid())
+    if (!pResult)
       throw std::exception("invalid future");
 
-    // TODO: Create a continuation
-    //lock guard(pResult->mResultLock);
-    //if (is_ready())
-    return async(f, get());
+    typedef decltype(f(std::declval<R>()))   result_type;
+    typedef packaged_task< result_type (R) > task_type;
+
+    pResult->mResultLock.lock();
+    pResult->mContinuation.reset( new task_type( std::move(f) ) );
+    if (pResult && pResult->mResult) {
+      pResult->mResultCondition.notify_all();
+      pResult->mResultLock.unlock();
+      (*pResult->mContinuation)(get());
+    } else {
+      pResult->mResultLock.unlock();
+    }
+
+    return static_cast<task_type*>(pResult->mContinuation.get())->get_future();
   }
 
-  template< class > friend class packaged_task;
-  template< class, class > friend class packaged_task_impl;
+  template< typename > friend class packaged_task;
+  template< typename, typename > friend class packaged_task_impl;
 
 protected:
   future() { }
@@ -457,9 +528,8 @@ protected:
 
 ///////////////////////////////////////////////////////////////////////////
 
-template< class R >
-R tthread::future<R>::get()
-{
+template< typename R >
+R tthread::future<R>::get() {
   std::shared_ptr< async_result<R> > pResult = mResult;
   if (!pResult)
     throw std::runtime_error("invalid future");
@@ -474,9 +544,8 @@ R tthread::future<R>::get()
   return result_helper<R>::fetch(result.mResult.get());
 }
 
-template< class R >
-void tthread::future<R>::wait()
-{
+template< typename R >
+void tthread::future<R>::wait() {
   std::shared_ptr< async_result<R> > pResult = mResult;
   if (!pResult)
     return;
@@ -484,17 +553,15 @@ void tthread::future<R>::wait()
   const async_result<R>& result = *pResult;
 
   lock guard(result.mResultLock);
-  while (!result.mResult && !result.mException)
-  {
+  while (!result.mResult && !result.mException) {
     result.mResultCondition.wait(result.mResultLock);
   }
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
-template< class F >
-auto async(F f) -> future<decltype(f())>
-{
+template< typename F >
+auto async(F f) -> future<decltype(f())> {
   typedef decltype(f())                result_type;
   typedef packaged_task<result_type()> task_type;
   typedef future<result_type>          future_type;
@@ -506,22 +573,22 @@ auto async(F f) -> future<decltype(f())>
   return future;
 }
 
-template< class F, class T >
-auto async(F f, T t) -> future<decltype(f(t))> {
-  return async(std::bind(f, t));
+template< typename F, typename T >
+auto async(F f, T&& t) -> future<decltype(f(t))> {
+  return async(std::bind(f, std::move(t)));
 }
 
-template< class F, class T, class U >
+template< typename F, typename T, typename U >
 auto async(F f, T t, U u) -> future<decltype(f(t,u))> {
   return async(std::bind(f, t, u));
 }
 
-template< class F, class T, class U, class V >
+template< typename F, typename T, typename U, typename V >
 auto async(F f, T t, U u, V v) -> future<decltype(f(t,u,v))> {
   return async(std::bind(f, t, u, v));
 }
 
-template< class F, class T, class U, class V, class W >
+template< typename F, typename T, typename U, typename V, typename W >
 auto async(F f, T t, U u, V v, W w) -> future<decltype(f(t,u,v,w))> {
   return async(std::bind(f, t, u, v));
 }

@@ -6,5 +6,5 @@ TinyThread++ (tthread, http://tinythread.sourceforge.net/) is a lightweight and 
 This project extends TinyThread++ by providing
 
 * Lambda function execution
-* tthread::async, a lightweight analog to std::async
-* tthread::future, a lightweight analog to std::future
+* tthread::future and tthread::async, lightweight analogs to std::future and std::async
+* future.then() support for task continuations

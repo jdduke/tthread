@@ -37,9 +37,9 @@ using namespace std;
 
 #if USE_TTHREAD
 using namespace tthread;
-#define SYNC_FLAGS
+#define LAUNCH_FLAGS
 #else
-#define SYNC_FLAGS std::launch::async,
+#define LAUNCH_FLAGS std::launch::async,
 #endif
 
 int ackermann(int m, int n) {
@@ -53,7 +53,7 @@ int main() {
   cout << "Main thread id: " << this_thread::get_id() << endl;
   vector<future<void>> futures;
   for (int i = 0; i < 8; ++i) {
-    futures.emplace_back(async(SYNC_FLAGS [] {
+    futures.emplace_back(async(LAUNCH_FLAGS [] {
       this_thread::sleep_for(chrono::seconds(1));
       cout << this_thread::get_id() << " ";
     }));
@@ -65,6 +65,7 @@ int main() {
 
   ///////////////////////////////////////////////////////////////////////////
 
+#if 0
   packaged_task<int(void)> task(bind(&ackermann,3,11));
   auto f = task.get_future();
   task();
@@ -80,12 +81,19 @@ int main() {
     std::cout << "Ackerman(3,11) = " << f.get() << endl;
   });
   cout << endl;
+#endif
 
   ///////////////////////////////////////////////////////////////////////////
 
   try {
-    std::cout << "f(g(5)) = 5*(1*(5)) = " <<
-      async([]() { return 5; }).then([](int x) { return x * 5;}).get();//then([](int x) { return x * 5; }).get();
+    std::cout << "h(f(g(1)) = 5*5*(5*(1)) = ";
+    auto f = async([]() { return 5; });
+    std::cout << 
+      f.then([](int x) { 
+        return x * 5;
+      }).then([](int x) {
+        return x * 5; 
+      }).get() << std::endl;
   } catch (std::runtime_error& e) {
     std::cout << e.what() << std::endl;
   }

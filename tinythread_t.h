@@ -44,8 +44,7 @@ class threadt : public thread {
   public:
 
     template< class thread_func_t >
-    threadt(thread_func_t&& func) : thread()
-    {
+    threadt(thread_func_t&& func) : thread() {
       // Serialize access to this thread structure
       lock_guard<mutex> guard(mDataMutex);
 
@@ -65,8 +64,7 @@ class threadt : public thread {
 #endif
 
       // Did we fail to create the thread?
-      if(!mHandle)
-      {
+      if(!mHandle) {
         mNotAThread = true;
         delete ti;
       }
@@ -74,15 +72,18 @@ class threadt : public thread {
 
 protected:
 
-  inline mutex& getLock() const { return mDataMutex; }
-  inline void   setNotAThread(bool bNotAThread) { mNotAThread = bNotAThread; }
+  inline mutex& getLock() const { 
+    return mDataMutex; 
+  }
+  inline void   setNotAThread(bool bNotAThread) {
+    mNotAThread = bNotAThread; 
+  }
 
-
-  template< class thread_func_t >
+  template< typename thread_func_t >
   struct _thread_start_info_t {
-    thread_func_t mFunction; ///< Pointer to the function to be executed.
-    void * mArg;         ///< Function argument for the thread function.
-    threadt * mThread;    ///< Pointer to the thread object.
+    thread_func_t mFunction; ///< Handle to the function to be executed.
+    void * mArg;             ///< Function argument for the thread function.
+    threadt * mThread;       ///< Pointer to the thread object.
     _thread_start_info_t(thread_func_t&& func, void * arg, threadt * thread)
     : mFunction(std::move(func)), mArg(arg), mThread(thread) { }
   };
@@ -108,13 +109,9 @@ void * threadt::wrapper_function(void * aArg)
   // Get thread startup information
   std::unique_ptr<thread_info> ti( (thread_info*)aArg );
 
-  try
-  {
-    // Call the actual client thread function
+  try {
     ti->mFunction(ti->mArg);
-  }
-  catch(...)
-  {
+  } catch(...) {
     // Uncaught exceptions will terminate the application (default behavior
     // according to the C++0x draft)
     std::terminate();

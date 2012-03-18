@@ -156,10 +156,6 @@ struct _thread_start_info {
   thread_func mFunction; ///< Pointer to the function to be executed.
   void * mArg;         ///< Function argument for the thread function.
   thread * mThread;    ///< Pointer to the thread object.
-#if defined(_TTHREAD_FUNCTIONAL_)
-  //_thread_start_info(thread_func&& func, void * arg, thread * thread)
-    //: mFunction(std::move(func)), mArg(arg), mThread(thread) { }
-#endif
   _thread_start_info(thread_func func, void * arg, thread * thread)
     : mFunction(func), mArg(arg), mThread(thread) { }
 };

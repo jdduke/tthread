@@ -510,7 +510,7 @@ private:
 };
 
 template< typename R >
-void tthread::packaged_task<R()>::operator()() {
+void packaged_task<R()>::operator()() {
 	std::shared_ptr< async_result<R> > result;
 	if (process(result)) {
 		result_helper<R>::store(*result, mFunc);
@@ -553,7 +553,7 @@ private:
 };
 
 template< typename R, typename Arg >
-void tthread::packaged_task<R(Arg)>::operator()(Arg arg) {
+void packaged_task<R(Arg)>::operator()(Arg arg) {
 	std::shared_ptr< async_result<R> > result;
 	if (process(result)) {
 		result_helper<R>::store(*result, mFunc, arg);
@@ -570,11 +570,11 @@ class future {
 public:
 	typedef std::shared_ptr< async_result<R> > async_result_ptr;
 
-	future(future<R> && f) : mResult(f.mResult) { }
+	future(future<R>&& f)           : mResult(std::move(f.mResult)) { }
 	future(async_result_ptr result) : mResult(result) { }
 	~future() { }
 
-	future& operator=(future && other) {
+	future& operator=(future&& other) {
 		std::swap(mResult, other.mResult);
 	}
 
@@ -592,18 +592,7 @@ public:
 	void wait();
 
 	template< typename F >
-	auto then(F f) -> future<decltype(f(std::declval<R>()))> {
-		if (!mResult)
-			throw std::runtime_error("invalid future");
-
-		typedef decltype(f(std::declval<R>()))   result_type;
-		typedef packaged_task< result_type(R) > task_type;
-
-		std::unique_ptr<task_type> continuation(new task_type(std::move(f)));
-		mResult->setContinuation(continuation.get());
-
-		return continuation.release()->get_future();
-	}
+	auto then(F f) -> future<decltype(f(std::declval<R>()))>;
 
 protected:
 
@@ -616,17 +605,32 @@ protected:
 ///////////////////////////////////////////////////////////////////////////
 
 template< typename R >
-R tthread::future<R>::get() {
+R future<R>::get() {
 	if (!mResult)
 		throw std::runtime_error("invalid future");
 	return (*mResult)();
 }
 
 template< typename R >
-void tthread::future<R>::wait() {
+void future<R>::wait() {
 	if (!mResult)
 		return;
 	mResult->wait();
+}
+
+template< typename R >
+template< typename F >
+auto future<R>::then(F f) -> future<decltype(f(std::declval<R>()))> {
+	if (!mResult)
+		throw std::runtime_error("invalid future");
+
+	typedef decltype(f(std::declval<R>()))   result_type;
+	typedef packaged_task< result_type(R) > task_type;
+
+	std::unique_ptr<task_type> continuation(new task_type(std::move(f)));
+	mResult->setContinuation(continuation.get());
+
+	return continuation.release()->get_future();
 }
 
 ///////////////////////////////////////////////////////////////////////////

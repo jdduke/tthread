@@ -570,12 +570,13 @@ class future {
 public:
 	typedef std::shared_ptr< async_result<R> > async_result_ptr;
 
-	future(future<R>&& f)           : mResult(std::move(f.mResult)) { }
+	future(future<R>&& other) { *this = std::move(other); }
 	future(async_result_ptr result) : mResult(result) { }
 	~future() { }
 
 	future& operator=(future&& other) {
-		std::swap(mResult, other.mResult);
+		std::swap(mResult, std::move(other.mResult));
+		return *this;
 	}
 
 	bool valid() const     {

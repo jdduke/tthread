@@ -48,6 +48,23 @@ int ackermann(int m, int n) {
 
 int main() {
 
+	///////////////////////////////////////////////////////////////////////////
+
+	cout << "f(g0(g1(g2(g3()))) = 1*(2*(3*(4*(5)))) = " <<
+		async([]() {
+			return 5;
+		}).then([](int x) {
+			return x * 4;
+		}).then([](int x) {
+			return x * 3;
+		}).then([](int x) {
+			return x * 2;
+		}).then([](int x) {
+			return x;
+		}).get() << endl << endl;
+
+	///////////////////////////////////////////////////////////////////////////
+
 	cout << "Main thread id: " << this_thread::get_id() << endl;
 	vector<future<void>> futures;
 	for (int i = 0; i < 8; ++i) {
@@ -59,14 +76,14 @@ int main() {
 	for_each(futures.begin(), futures.end(), [](future<void>& f) {
 		f.wait();
 	});
-	cout << endl;
+	cout << endl << endl;
 
 	///////////////////////////////////////////////////////////////////////////
 
 	packaged_task<int(void)> task(bind(&ackermann, 3, 11));
 	auto f = task.get_future();
 	task();
-	cout << "Ackerman(3,11) = " << f.get() << endl;
+	cout << "Sync: Ackerman(3,11)= " << f.get() << endl << endl;
 
 	///////////////////////////////////////////////////////////////////////////
 
@@ -75,27 +92,10 @@ int main() {
 		futures2.emplace_back(async(bind(&ackermann, 3, 11)));
 	}
 	for_each(futures2.begin(), futures2.end(), [=](future<int>& f) {
-		std::cout << "Ackerman(3,11) = " << f.get() << endl;
+		std::cout << "Async: Ackerman(3,11) = " << f.get() << endl;
 	});
-	cout << endl;
+	cout << endl << endl;
 
 	///////////////////////////////////////////////////////////////////////////
 
-	try {
-		std::cout << "f(g0(g1(g2(g3()))) = 1*(2*(3*(4*(5)))) = ";
-		std::cout <<
-			async([]() {
-				return 5;
-			}).then([](int x) {
-				return x * 4;
-			}).then([](int x) {
-				return x * 3;
-			}).then([](int x) {
-				return x * 2;
-			}).then([](int x) {
-				return x;
-			}).get() << std::endl;
-	} catch (std::runtime_error& e) {
-		std::cout << e.what() << std::endl;
-	}
 }

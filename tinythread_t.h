@@ -41,87 +41,87 @@ namespace tthread {
 
 /// Thread class.
 class threadt : public thread {
-  public:
+public:
 
-    template< class thread_func_t >
-    threadt(thread_func_t&& func) : thread() {
-      // Serialize access to this thread structure
-      lock_guard<mutex> guard(mDataMutex);
+	template< class thread_func_t >
+	threadt(thread_func_t && func) : thread() {
+		// Serialize access to this thread structure
+		lock_guard<mutex> guard(mDataMutex);
 
-      // Fill out the thread startup information (passed to the thread wrapper,
-      // which will eventually free it)
-      auto ti = new _thread_start_info_t<thread_func_t>(std::move(func), nullptr, this);
+		// Fill out the thread startup information (passed to the thread wrapper,
+		// which will eventually free it)
+		auto ti = new _thread_start_info_t<thread_func_t>(std::move(func), nullptr, this);
 
-      // The thread is now alive
-      mNotAThread = false;
+		// The thread is now alive
+		mNotAThread = false;
 
-      // Create the thread
+		// Create the thread
 #if defined(_TTHREAD_WIN32_)
-      mHandle = (HANDLE) _beginthreadex(0, 0, wrapper_function<thread_func_t>, (void *) ti, 0, &mWin32ThreadID);
+		mHandle = (HANDLE) _beginthreadex(0, 0, wrapper_function<thread_func_t>, (void*) ti, 0, &mWin32ThreadID);
 #elif defined(_TTHREAD_POSIX_)
-      if(pthread_create(&mHandle, NULL, wrapper_function<thread_func_t>, (void *) ti) != 0)
-        mHandle = 0;
+		if (pthread_create(&mHandle, NULL, wrapper_function<thread_func_t>, (void*) ti) != 0)
+			mHandle = 0;
 #endif
 
-      // Did we fail to create the thread?
-      if(!mHandle) {
-        mNotAThread = true;
-        delete ti;
-      }
-    }
+		// Did we fail to create the thread?
+		if (!mHandle) {
+			mNotAThread = true;
+			delete ti;
+		}
+	}
 
 protected:
 
-  inline mutex& getLock() const {
-    return mDataMutex;
-  }
-  inline void   setNotAThread(bool bNotAThread) {
-    mNotAThread = bNotAThread;
-  }
+	inline mutex& getLock() const {
+		return mDataMutex;
+	}
+	inline void   setNotAThread(bool bNotAThread) {
+		mNotAThread = bNotAThread;
+	}
 
-  template< typename thread_func_t >
-  struct _thread_start_info_t {
-    thread_func_t mFunction; ///< Handle to the function to be executed.
-    void * mArg;             ///< Function argument for the thread function.
-    threadt * mThread;       ///< Pointer to the thread object.
-    _thread_start_info_t(thread_func_t&& func, void * arg, threadt * thread)
-    : mFunction(std::move(func)), mArg(arg), mThread(thread) { }
-  };
+	template< typename thread_func_t >
+	struct _thread_start_info_t {
+		thread_func_t mFunction; ///< Handle to the function to be executed.
+		void* mArg;              ///< Function argument for the thread function.
+		threadt* mThread;        ///< Pointer to the thread object.
+		_thread_start_info_t(thread_func_t && func, void* arg, threadt* thread)
+			: mFunction(std::move(func)), mArg(arg), mThread(thread) { }
+	};
 
-  template< class thread_func_t >
+	template< class thread_func_t >
 #if defined(_TTHREAD_WIN32_)
-  static unsigned WINAPI wrapper_function(void * aArg);
+	static unsigned WINAPI wrapper_function(void* aArg);
 #elif defined(_TTHREAD_POSIX_)
-  static void * wrapper_function(void * aArg);
+	static void* wrapper_function(void* aArg);
 #endif
 
 };
 
 template< class thread_func_t >
 #if defined(_TTHREAD_WIN32_)
-unsigned WINAPI threadt::wrapper_function(void * aArg)
+unsigned WINAPI threadt::wrapper_function(void* aArg)
 #elif defined(_TTHREAD_POSIX_)
-void * threadt::wrapper_function(void * aArg)
+void* threadt::wrapper_function(void* aArg)
 #endif
 {
-  typedef _thread_start_info_t<thread_func_t> thread_info;
+	typedef _thread_start_info_t<thread_func_t> thread_info;
 
-  // Get thread startup information
-  std::unique_ptr<thread_info> ti( (thread_info*)aArg );
+	// Get thread startup information
+	std::unique_ptr<thread_info> ti((thread_info*)aArg);
 
-  try {
-    ti->mFunction();
-  } catch(...) {
-    // Uncaught exceptions will terminate the application (default behavior
-    // according to the C++0x draft)
-    std::terminate();
-  }
+	try {
+		ti->mFunction();
+	} catch (...) {
+		// Uncaught exceptions will terminate the application (default behavior
+		// according to the C++0x draft)
+		std::terminate();
+	}
 
-  // The thread is no longer executing
-  //lock_guard<mutex> guard(ti->mThread->getLock());
-  ti->mThread->setNotAThread(true);
+	// The thread is no longer executing
+	//lock_guard<mutex> guard(ti->mThread->getLock());
+	ti->mThread->setNotAThread(true);
 
-  return 0;
+	return 0;
 }
 
 }

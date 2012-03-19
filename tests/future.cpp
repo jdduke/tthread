@@ -21,80 +21,81 @@ freely, subject to the following restrictions:
     distribution.
 */
 
-#define USE_TTHREAD 1
-#if USE_TTHREAD
-#include <tinythread.h>
-#include <tinythread_experimental.h>
-#else
-#include <future>
-#endif
 
 #include <algorithm>
 #include <iostream>
 #include <vector>
 
+#define USE_TTHREAD 1
+#if USE_TTHREAD
+#include <tinythread.h>
+#include <tinythread_experimental.h>
+using namespace tthread;
+#else
+#include <future>
+#endif
+
 using namespace std;
 
 #if USE_TTHREAD
-using namespace tthread;
-#define LAUNCH_FLAGS
-#else
-#define LAUNCH_FLAGS std::launch::async,
 #endif
 
 int ackermann(int m, int n) {
-  if(m==0) return n+1;
-  if(n==0) return ackermann(m-1,1);
-  return ackermann(m-1, ackermann(m, n-1));
+	if (m == 0) return n + 1;
+	if (n == 0) return ackermann(m - 1, 1);
+	return ackermann(m - 1, ackermann(m, n - 1));
 }
 
 int main() {
 
-  cout << "Main thread id: " << this_thread::get_id() << endl;
-  vector<future<void>> futures;
-  for (int i = 0; i < 8; ++i) {
-    futures.emplace_back(async(LAUNCH_FLAGS [] {
-      this_thread::sleep_for(chrono::seconds(1));
-      cout << this_thread::get_id() << " ";
-    }));
-  }
-  for_each(futures.begin(), futures.end(), [](future<void> & f) {
-    f.wait();
-  });
-  cout << endl;
+	cout << "Main thread id: " << this_thread::get_id() << endl;
+	vector<future<void>> futures;
+	for (int i = 0; i < 8; ++i) {
+		futures.emplace_back(async([] {
+			this_thread::sleep_for(chrono::seconds(1));
+			cout << this_thread::get_id() << " ";
+		}));
+	}
+	for_each(futures.begin(), futures.end(), [](future<void>& f) {
+		f.wait();
+	});
+	cout << endl;
 
-  ///////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////
 
-  packaged_task<int(void)> task(bind(&ackermann,3,11));
-  auto f = task.get_future();
-  task();
-  cout << "Ackerman(3,11) = " << f.get() << endl;
+	packaged_task<int(void)> task(bind(&ackermann, 3, 11));
+	auto f = task.get_future();
+	task();
+	cout << "Ackerman(3,11) = " << f.get() << endl;
 
-  ///////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////
 
-  vector<future<int>> futures2;
-  for (int i = 0; i < 8; ++i) {
-    futures2.emplace_back(async(bind(&ackermann, 3, 11)));
-  }
-  for_each(futures2.begin(), futures2.end(), [=](future<int> & f) {
-    std::cout << "Ackerman(3,11) = " << f.get() << endl;
-  });
-  cout << endl;
+	vector<future<int>> futures2;
+	for (int i = 0; i < 8; ++i) {
+		futures2.emplace_back(async(bind(&ackermann, 3, 11)));
+	}
+	for_each(futures2.begin(), futures2.end(), [=](future<int>& f) {
+		std::cout << "Ackerman(3,11) = " << f.get() << endl;
+	});
+	cout << endl;
 
-  ///////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////
 
-#if !defined(_TTHREAD_VARIADIC_)
-  try {
-    std::cout << "h(f(g(1)) = 5*5*(5*(1)) = ";
-    auto f = async([]() { return 5; });
-    std::cout << 
-      f.then([](int x) { 
-        return x * 5;
-      }).then([](int x) {
-        return x * 5; 
-      }).get() << std::endl;
-  } catch (std::runtime_error& e) {
-    std::cout << e.what() << std::endl;
-  }
-#endif
+	try {
+		std::cout << "f(g0(g1(g2(g3()))) = 1*(2*(3*(4*(5)))) = ";
+		std::cout <<
+			async([]() {
+				return 5;
+			}).then([](int x) {
+				return x * 4;
+			}).then([](int x) {
+				return x * 3;
+			}).then([](int x) {
+				return x * 2;
+			}).then([](int x) {
+				return x;
+			}).get() << std::endl;
+	} catch (std::runtime_error& e) {
+		std::cout << e.what() << std::endl;
+	}
 }

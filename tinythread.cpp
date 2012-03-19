@@ -220,36 +220,6 @@ thread::thread(thread_func func, void * aArg)
   }
 }
 
-#if defined(_TTHREAD_FUNCTIONAL_)
-thread::thread(thread_func&& func)
-{
-  // Serialize access to this thread structure
-  lock_guard<mutex> guard(mDataMutex);
-
-  // Fill out the thread startup information (passed to the thread wrapper,
-  // which will eventually free it)
-  _thread_start_info * ti = new _thread_start_info(std::move(func), NULL, this);
-
-  // The thread is now alive
-  mNotAThread = false;
-
-  // Create the thread
-#if defined(_TTHREAD_WIN32_)
-  mHandle = (HANDLE) _beginthreadex(0, 0, wrapper_function, (void *) ti, 0, &mWin32ThreadID);
-#elif defined(_TTHREAD_POSIX_)
-  if(pthread_create(&mHandle, NULL, wrapper_function, (void *) ti) != 0)
-    mHandle = 0;
-#endif
-
-  // Did we fail to create the thread?
-  if(!mHandle)
-  {
-    mNotAThread = true;
-    delete ti;
-  }
-}
-#endif
-
 thread::~thread()
 {
   if(joinable())

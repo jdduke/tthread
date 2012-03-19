@@ -404,7 +404,7 @@ public:
 	template < typename F >
 	explicit packaged_task_impl(const F& f) : mFunc(f) { }
 	template < typename F >
-	explicit packaged_task_impl(F && f)     : mFunc(std::move(f)) { }
+	explicit packaged_task_impl(F&& f)      : mFunc(std::move(f)) { }
 
 	///////////////////////////////////////////////////////////////////////////
 	// move support
@@ -476,7 +476,7 @@ public:
 	template < typename F >
 	explicit packaged_task(const F& f)  : base(f) { }
 	template < typename F >
-	explicit packaged_task(F && f)       : base(std::move(f)) { }
+	explicit packaged_task(F&& f)       : base(std::move(f)) { }
 
 	///////////////////////////////////////////////////////////////////////////
 	// move support
@@ -519,7 +519,7 @@ public:
 	template < typename F >
 	explicit packaged_task(const F& f) : base(std::move(f)) { }
 	template < typename F >
-	explicit packaged_task(F && f)      : base(std::move(f)) { }
+	explicit packaged_task(F&& f)      : base(std::move(f)) { }
 
 	///////////////////////////////////////////////////////////////////////////
 	// move support

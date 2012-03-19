@@ -43,23 +43,9 @@ enum policy {
 };
 
 ///////////////////////////////////////////////////////////////////////////
-// forward declarations
 
-template< typename F >
-auto async(F f) -> future<decltype(f())>;
-
-template< typename F >
-auto async(launch::policy, F f) -> future<decltype(f())>;
-
-///////////////////////////////////////////////////////////////////////////
-
-template< typename F >
-auto async(launch::policy policy, F f) -> future<decltype(f())> {
-	typedef decltype(f())                result_type;
-	typedef packaged_task<result_type()> task_type;
-	typedef future<result_type>          future_type;
-
-	task_type task(std::move(f));
+template< typename Task >
+auto async_impl(launch::policy policy, Task&& task) -> decltype(task.get_future()) {
 	auto future = task.get_future();
 	if ((policy & launch::async) != 0) {
 		threadt thread(std::move(task));
@@ -69,8 +55,27 @@ auto async(launch::policy policy, F f) -> future<decltype(f())> {
 }
 
 template< typename F >
-auto async(F f) -> future<decltype(f())> {
+auto async(launch::policy policy, const F& f) -> future<decltype(f())> {
+	typedef decltype(f())                result_type;
+	typedef packaged_task<result_type()> task_type;
+	return async_impl(policy, task_type(f));
+}
+
+template< typename F >
+auto async(launch::policy policy, F&& f) -> future<decltype(f())> {
+	typedef decltype(f())                result_type;
+	typedef packaged_task<result_type()> task_type;
+	return async_impl(policy, task_type(std::move(f)));
+}
+
+template< typename F >
+auto async(const F& f) -> future<decltype(f())> {
 	return async(launch::any, f);
+}
+
+template< typename F >
+auto async(F&& f) -> future<decltype(f())> {
+	return async(launch::any, std::move(f));
 }
 
 #if defined(_TTHREAD_VARIADIC_)

@@ -515,22 +515,6 @@ class thread {
     /// CreateThread() (Windows) functions.
     thread(thread_func func, void * aArg);
 
-#if defined(_TTHREAD_FUNCTIONAL_)
-
-    /// Thread starting constructor.
-    /// Construct a \c thread object with a new thread of execution.
-    /// @param[in] thread_func_t A function pointer to a function of type:
-    ///          <tt>thread_func_t</tt>
-    /// @param[in] aArg Argument to the thread function.
-    /// @note This constructor is not fully compatible with the standard C++
-    /// thread class. It is more similar to the pthread_create() (POSIX) and
-    /// CreateThread() (Windows) functions.
-    //template<class thread_func_t>
-    //xthread(thread_func_t func, void * aArg);
-
-    thread(thread_func&& func);
-#endif
-
     /// Destructor.
     /// @note If the thread is joinable upon destruction, \c std::terminate()
     /// will be called, which terminates the process. It is always wise to do

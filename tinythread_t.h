@@ -72,11 +72,11 @@ class threadt : public thread {
 
 protected:
 
-  inline mutex& getLock() const { 
-    return mDataMutex; 
+  inline mutex& getLock() const {
+    return mDataMutex;
   }
   inline void   setNotAThread(bool bNotAThread) {
-    mNotAThread = bNotAThread; 
+    mNotAThread = bNotAThread;
   }
 
   template< typename thread_func_t >
@@ -110,7 +110,7 @@ void * threadt::wrapper_function(void * aArg)
   std::unique_ptr<thread_info> ti( (thread_info*)aArg );
 
   try {
-    ti->mFunction(ti->mArg);
+    ti->mFunction();
   } catch(...) {
     // Uncaught exceptions will terminate the application (default behavior
     // according to the C++0x draft)

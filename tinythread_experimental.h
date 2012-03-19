@@ -64,22 +64,35 @@ typedef lock_guard<future_mutex> lock;
 ///////////////////////////////////////////////////////////////////////////
 // launch
 namespace launch {
-  enum policy { 
+  enum policy {
     async    = 0x01,
     deferred = 0x02,
     sync     = deferred,
-    any      = async | deferred 
+    any      = async | deferred
   };
 };
 
 ///////////////////////////////////////////////////////////////////////////
 // forward declarations
 
+
+#if defined(_TTHREAD_VARIADIC_)
+
+template< typename... >
+class packaged_task;
+
+template< typename... >
+class packaged_task_continuation;
+
+#else
+
 template< typename >
 class packaged_task;
 
 template< typename >
 class packaged_task_continuation;
+
+#endif
 
 template< typename >
 class future;
@@ -101,13 +114,20 @@ struct result_helper {
   static void store(T& receiver, F& func) {
     receiver.set( func() );
   }
+
+#if defined(_TTHREAD_VARIADIC_)
+  template< typename T, typename F, typename... Args >
+  static void store(T& receiver, F& func, Args&&... args) {
+    receiver.set( func(std::move(args)...) );
+  }
+#else
   template< typename T, typename F, typename Arg >
   static void store(T& receiver, F& func, Arg&& arg) {
     receiver.set( func(std::move(arg)) );
   }
-
-  static R fetch(R* r) { 
-    return *r; 
+#endif
+  static R fetch(R* r) {
+    return *r;
   }
 
   template< typename F, typename Arg >
@@ -125,11 +145,20 @@ struct result_helper<void> {
     func();
     receiver.set(true);
   }
+
+#if defined(_TTHREAD_VARIADIC_)
+  template< typename T, typename F, typename... Args >
+  static void store(T& receiver, F& func, Args&&... args) {
+    func( std::move(args)... );
+    receiver.set(true);
+  }
+#else
   template< typename T, typename F, typename Arg >
   static void store(T& receiver, F& func, Arg&& arg) {
     func( std::move(arg) );
     receiver.set(true);
   }
+#endif
 
   static void fetch(...) {
 
@@ -219,9 +248,12 @@ struct async_result {
   }
 
   template<typename,typename> friend class packaged_task_impl;
+#if defined(_TTHREAD_VARIADIC_)
+  template<typename...>       friend class packaged_task;
+#endif
 
 protected:
-  async_result() 
+  async_result()
     : mReady(false), mExecuting(false), mException(false) { }
 
   _TTHREAD_DISABLE_ASSIGNMENT(async_result);
@@ -244,28 +276,43 @@ protected:
 
 #if defined(_TTHREAD_VARIADIC_)
 
+template < size_t N >
+struct apply_func {
+  template < typename F, typename... ArgsT, typename... Args >
+  static void applyTuple( F f,
+                          const std::tuple<ArgsT...>& t,
+                          Args... args ) {
+    apply_func<N-1>::applyTuple( f, t, std::get<N-1>( t ), args... );
+  }
+};
+
+template <>
+struct apply_func<0> {
+  template < typename F, typename... ArgsT, typename... Args >
+  static void applyTuple( F f,
+                          const std::tuple<ArgsT...>& /* t */,
+                          Args... args ) {
+    f( args... );
+  }
+};
+
+template < typename F, typename... ArgsT >
+void applyTuple( F f,
+                 const std::tuple<ArgsT...>& t ) {
+   apply_func<sizeof...(ArgsT)>::applyTuple( f, t );
+}
+
 template< typename... Args >
 class packaged_task_continuation {
 public:
   virtual void operator()(Args...) = 0;
   virtual ~packaged_task_continuation() { }
 };
-
-template< typename R >
-struct result_helper_v {
-  template< typename T, typename F, typename... Args>
-  static void store(T& receiver, F& func, Args&&... args) {
-    receiver.reset( new R( func( std::forward<Args...>(args)... ) ) );
-  }
-};
-
 template< >
-struct result_helper_v<void> {
-  template< typename T, typename F, typename... Args>
-  static void store(T& receiver, F& func, Args&&... args) {
-    func( std::forward<Args...>(args)... );
-    receiver.reset( new bool(true) );
-  }
+class packaged_task_continuation< void > {
+public:
+  virtual void operator()(void) = 0;
+  virtual ~packaged_task_continuation() { }
 };
 
 template< typename R, typename... Args >
@@ -321,12 +368,22 @@ public:
   ///////////////////////////////////////////////////////////////////////////
   // execution
 
-  void operator()(void*) { (*this)(); }
-  void operator()(Args&&...);
+  void operator()(Args&&... args)  {
+    std::shared_ptr< async_result<R> > result;
+    {
+      lock guard(mLock);
+      if (!!mFunc) {
+        if (!mResult)
+          mResult.reset( new async_result<R>() );
+        if (!mResult->mExecuting) {
+          mResult->setExecuting(true);
+          result = mResult;
+        }
+      }
+    }
 
-  void reset() {
-    lock guard(mLock);
-    mResult.reset( );
+    if (result)
+      result_helper<R>::store(*result, mFunc, args...);
   }
 
 private:
@@ -336,31 +393,6 @@ private:
   std::function<R(Args...)> mFunc;
   std::shared_ptr< async_result<R> > mResult;
 };
-
-
-///////////////////////////////////////////////////////////////////////////
-
-template< typename R, typename... Args >
-void tthread::packaged_task<R(Args...)>::operator()(Args&&... args)
-{
-  if (!(*this))
-    return;
-
-  std::shared_ptr< async_result<R> > result;
-  {
-    lock guard(mLock);
-    if (!mResult)
-      mResult.reset( new async_result<R>() );
-    result = mResult;
-  }
-
-  lock guardResult(result->mResultLock);
-
-  if(!result->mResult)
-    result_helper_v<R>::store(result->mResult, mFunc, std::forward<Args...>(args)... );
-
-  result->mResultCondition.notify_all();
-}
 
 #else
 
@@ -479,7 +511,6 @@ public:
     return *this;
   }
 
-  void operator()(void*) { operator()(); }
   void operator()();
 
 private:
@@ -523,7 +554,6 @@ public:
     return *this;
   }
 
-  void operator()(void* arg) { operator()((Arg)arg); }
   void operator()(Arg);
 
 private:
@@ -546,9 +576,12 @@ void tthread::packaged_task<R(Arg)>::operator()(Arg arg) {
 template< typename R >
 class future {
 public:
+  typedef std::shared_ptr< async_result<R> > async_result_ptr;
 
-  ~future() { }
   future(future<R>&& f) : mResult( f.mResult ) { }
+  future(async_result_ptr result) : mResult(result) { }
+  ~future() { }
+
   future& operator=(future&& other) { std::swap(mResult, other.mResult); }
 
   bool valid() const     { return mResult; }
@@ -558,10 +591,11 @@ public:
   R    get();
   void wait();
 
+#if !defined(_TTHREAD_VARIADIC_)
   template< typename F >
   auto then( F f ) -> future<decltype(f(std::declval<R>()))> {
     if (!mResult)
-      throw std::exception("invalid future");
+      throw std::runtime_error("invalid future");
 
     typedef decltype(f(std::declval<R>()))   result_type;
     typedef packaged_task< result_type (R) > task_type;
@@ -571,15 +605,11 @@ public:
 
     return continuation.release()->get_future();
   }
-
-  template< typename > friend class packaged_task;
-  template< typename, typename > friend class packaged_task_impl;
+#endif
 
 protected:
-  typedef std::shared_ptr< async_result<R> > async_result_ptr;
 
   future() { }
-  future(async_result_ptr result) : mResult(result) { }
   _TTHREAD_DISABLE_ASSIGNMENT(future)
 
   async_result_ptr mResult;

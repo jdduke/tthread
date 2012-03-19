@@ -65,7 +65,6 @@ int main() {
 
   ///////////////////////////////////////////////////////////////////////////
 
-#if 0
   packaged_task<int(void)> task(bind(&ackermann,3,11));
   auto f = task.get_future();
   task();
@@ -75,16 +74,16 @@ int main() {
 
   vector<future<int>> futures2;
   for (int i = 0; i < 8; ++i) {
-    futures2.emplace_back(async(SYNC_FLAGS &ackermann, 3, 11));
+    futures2.emplace_back(async(bind(&ackermann, 3, 11)));
   }
   for_each(futures2.begin(), futures2.end(), [=](future<int> & f) {
     std::cout << "Ackerman(3,11) = " << f.get() << endl;
   });
   cout << endl;
-#endif
 
   ///////////////////////////////////////////////////////////////////////////
 
+#if !defined(_TTHREAD_VARIADIC_)
   try {
     std::cout << "h(f(g(1)) = 5*5*(5*(1)) = ";
     auto f = async([]() { return 5; });
@@ -97,5 +96,5 @@ int main() {
   } catch (std::runtime_error& e) {
     std::cout << e.what() << std::endl;
   }
-  
+#endif
 }

@@ -31,7 +31,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY
     CACHE PATH
     "Single Directory for all static libraries.")
 
-if(UNIX)
+if(UNIX OR MINGW)
   set(STOP_ON_FIRST_ERROR TRUE CACHE BOOL "Stop compilation on first error")
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")

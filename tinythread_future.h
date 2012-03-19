@@ -30,6 +30,7 @@ freely, subject to the following restrictions:
 #include "tinythread_t.h"
 #include "fast_mutex.h"
 
+#include <assert.h>
 #include <memory>
 #include <stdexcept>
 
@@ -58,7 +59,7 @@ namespace tthread {
 
 ///////////////////////////////////////////////////////////////////////////
 // typedefs
-typedef mutex future_mutex;
+typedef fast_mutex future_mutex;
 typedef lock_guard<future_mutex> lock;
 
 ///////////////////////////////////////////////////////////////////////////
@@ -203,6 +204,11 @@ struct async_result {
 	typedef typename result_helper<R>::type result_type;
 	typedef async_result<R> this_type;
 
+	~async_result() {
+		lock guard(mLock);
+		mCondition.notify_all();
+	}
+
 	bool ready() const volatile {
 		return mReady;
 	}
@@ -221,7 +227,7 @@ struct async_result {
 		return mResult;
 	}
 
-	void set(result_type && r) volatile {
+	void set(result_type&& r) volatile {
 		locked_ptr<this_type, future_mutex> lockedSelf(*this, mLock);
 		if (!mReady) {
 			lockedSelf->mResult = std::move(r);
@@ -418,7 +424,7 @@ public:
 	template < typename F >
 	explicit packaged_task_impl(const F& f) : mFunc(f) { }
 	template < typename F >
-	explicit packaged_task_impl(F && f)      : mFunc(std::move(f)) { }
+	explicit packaged_task_impl(F && f)     : mFunc(std::move(f)) { }
 
 	///////////////////////////////////////////////////////////////////////////
 	// move support
@@ -434,8 +440,9 @@ public:
 
 	void swap(packaged_task_impl && other) {
 		lock guard(mLock);
-		std::swap(mFunc,      other.mFunc);
-		std::swap(mResult,    other.mResult);
+		//lock guardOther(other.mLock);
+		std::swap(mFunc,      std::move(other.mFunc));
+		std::swap(mResult,    std::move(other.mResult));
 	}
 
 	///////////////////////////////////////////////////////////////////////////
@@ -570,21 +577,24 @@ class future {
 public:
 	typedef std::shared_ptr< async_result<R> > async_result_ptr;
 
-	future(future<R>&& other) { *this = std::move(other); }
-	future(async_result_ptr result) : mResult(result) { }
+	future(future<R>&& other)       : mResult(std::move(other.mResult)) { assert(valid()); }//{ *this = std::move(other); }
+	future(async_result_ptr result) : mResult(result) { assert(valid()); }
 	~future() { }
 
 	future& operator=(future&& other) {
-		std::swap(mResult, std::move(other.mResult));
+		//std::swap(mResult, std::move(other.mResult));
+		mResult.swap(other.mResult);
 		return *this;
 	}
 
 	bool valid() const     {
-		return mResult;
+		return !!mResult;
 	}
+
 	bool is_ready() const  {
 		return valid() && mResult->ready();
 	}
+
 	bool has_value() const {
 		return is_ready();
 	}
@@ -607,24 +617,17 @@ protected:
 
 template< typename R >
 R future<R>::get() {
-	if (!mResult)
-		throw std::runtime_error("invalid future");
 	return (*mResult)();
 }
 
 template< typename R >
 void future<R>::wait() {
-	if (!mResult)
-		return;
 	mResult->wait();
 }
 
 template< typename R >
 template< typename F >
 auto future<R>::then(F f) -> future<decltype(f(std::declval<R>()))> {
-	if (!mResult)
-		throw std::runtime_error("invalid future");
-
 	typedef decltype(f(std::declval<R>()))   result_type;
 	typedef packaged_task< result_type(R) > task_type;
 

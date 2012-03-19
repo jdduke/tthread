@@ -50,7 +50,8 @@ int main() {
 
 	///////////////////////////////////////////////////////////////////////////
 
-	cout << "f(g0(g1(g2(g3()))) = 1*(2*(3*(4*(5)))) = " <<
+	try {
+		cout << "f(g0(g1(g2(g3()))) = 1*(2*(3*(4*(5)))) = " <<
 		async([]() {
 			return 5;
 		}).then([](int x) {
@@ -62,7 +63,10 @@ int main() {
 		}).then([](int x) {
 			return x;
 		}).get() << endl << endl;
-
+	} catch (...) {
+		cout << "Error in async continuation." << endl << endl;
+	}
+	
 	///////////////////////////////////////////////////////////////////////////
 
 	cout << "Main thread id: " << this_thread::get_id() << endl;

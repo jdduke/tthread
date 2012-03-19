@@ -21,8 +21,8 @@ freely, subject to the following restrictions:
     distribution.
 */
 
-#ifndef _TINYTHREAD_EXPERIMENTAL_H_
-#define _TINYTHREAD_EXPERIMENTAL_H_
+#ifndef _TINYTHREAD_FUTURE_H_
+#define _TINYTHREAD_FUTURE_H_
 
 /// @file
 
@@ -33,8 +33,6 @@ freely, subject to the following restrictions:
 #include <assert.h>
 #include <memory>
 #include <stdexcept>
-
-#define _TTHREAD_EXPERIMENTAL_
 
 #if !defined(_MSC_VER)
 #define _TTHREAD_VARIADIC_
@@ -63,19 +61,7 @@ typedef fast_mutex future_mutex;
 typedef lock_guard<future_mutex> lock;
 
 ///////////////////////////////////////////////////////////////////////////
-// launch
-namespace launch {
-enum policy {
-    async    = 0x01,
-    deferred = 0x02,
-    sync     = deferred,
-    any      = async | deferred
-};
-};
-
-///////////////////////////////////////////////////////////////////////////
 // forward declarations
-
 
 #if defined(_TTHREAD_VARIADIC_)
 
@@ -94,12 +80,6 @@ class packaged_task_continuation;
 
 template< typename >
 class future;
-
-template< typename F >
-auto async(F f) -> future<decltype(f())>;
-
-template< typename F >
-auto async(launch::policy, F f) -> future<decltype(f())>;
 
 ///////////////////////////////////////////////////////////////////////////
 // async_result
@@ -577,18 +557,17 @@ class future {
 public:
 	typedef std::shared_ptr< async_result<R> > async_result_ptr;
 
-	future(future<R>&& other)       : mResult(std::move(other.mResult)) { assert(valid()); }//{ *this = std::move(other); }
-	future(async_result_ptr result) : mResult(result) { assert(valid()); }
+	future(future<R>&& other)       : mResult(std::move(other.mResult)) { }
+	future(async_result_ptr result) : mResult(result) { }
 	~future() { }
 
 	future& operator=(future&& other) {
-		//std::swap(mResult, std::move(other.mResult));
 		mResult.swap(other.mResult);
 		return *this;
 	}
 
 	bool valid() const     {
-		return !!mResult;
+		return !!mResult; 
 	}
 
 	bool is_ready() const  {
@@ -637,61 +616,8 @@ auto future<R>::then(F f) -> future<decltype(f(std::declval<R>()))> {
 	return continuation.release()->get_future();
 }
 
-///////////////////////////////////////////////////////////////////////////
-
-template< typename F >
-auto async(launch::policy policy, F f) -> future<decltype(f())> {
-	typedef decltype(f())                result_type;
-	typedef packaged_task<result_type()> task_type;
-	typedef future<result_type>          future_type;
-
-	task_type task(std::move(f));
-	auto future = task.get_future();
-	if ((policy & launch::async) != 0) {
-		threadt thread(std::move(task));
-		thread.detach();
-	}
-	return future;
-}
-
-template< typename F >
-auto async(F f) -> future<decltype(f())> {
-	return async(launch::any, f);
-}
-
-#if defined(_TTHREAD_VARIADIC_)
-
-template< typename F, typename... Args >
-auto async(F f, Args && ... args) -> future<decltype(f(args...))> {
-	return async(std::bind(f, std::move(args)...));
-}
-
-#else
-
-template< typename F, typename T >
-auto async(F f, T && t) -> future<decltype(f(t))> {
-	return async(std::bind(f, std::move(t)));
-}
-
-template< typename F, typename T, typename U >
-auto async(F f, T t, U u) -> future<decltype(f(t, u))> {
-	return async(std::bind(f, t, u));
-}
-
-template< typename F, typename T, typename U, typename V >
-auto async(F f, T t, U u, V v) -> future<decltype(f(t, u, v))> {
-	return async(std::bind(f, t, u, v));
-}
-
-template< typename F, typename T, typename U, typename V, typename W >
-auto async(F f, T t, U u, V v, W w) -> future<decltype(f(t, u, v, w))> {
-	return async(std::bind(f, t, u, v));
-}
-
-#endif
-
-}
+} // namespace tthread
 
 #undef _TTHREAD_DISABLE_ASSIGNMENT
 
-#endif // _TINYTHREAD_EXPERIMENTAL_H_
+#endif // _TINYTHREAD_FUTURE_H_

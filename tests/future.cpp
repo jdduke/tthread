@@ -29,6 +29,7 @@ freely, subject to the following restrictions:
 #define USE_TTHREAD 1
 #if USE_TTHREAD
 #include <tinythread.h>
+#include <tinythread_async.h>
 #include <tinythread_future.h>
 using namespace tthread;
 #else

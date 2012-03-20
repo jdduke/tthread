@@ -3,3 +3,5 @@
 /build
 /bin
 /mingw
+/mingw_64
+/threadpool_test

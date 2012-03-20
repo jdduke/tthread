@@ -34,7 +34,6 @@ freely, subject to the following restrictions:
 #include <memory>
 #include <stdexcept>
 
-// Macro for disabling assignments of objects.
 #if defined(_MSC_VER)
 namespace std {
 	template <typename T>

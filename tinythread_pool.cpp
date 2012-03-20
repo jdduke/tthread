@@ -48,15 +48,7 @@ thread_pool::thread_pool( unsigned thread_count )
 }
 
 tthread::thread_pool::~thread_pool() {
-	/*
-	Function f;
-	while (mFunctionQueue->wait_and_pop(f)) {
-		f();
-	}
-	*/
-	while (!mFunctionQueue->empty())
-		this_thread::sleep_for(chrono::milliseconds(100));
-	for (size_t i = 0; i < mThreads.size(); ++i)
-		mThreads[i].detach();
 	mFunctionQueue->destroy();
+	for (size_t i = 0; i < mThreads.size(); ++i)
+		mThreads[i].join();
 }

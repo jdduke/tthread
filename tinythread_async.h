@@ -27,6 +27,7 @@ freely, subject to the following restrictions:
 /// @file
 
 #include "tinythread_future.h"
+#include "tinythread_pool.h"
 #include "tinythread_t.h"
 
 namespace tthread {
@@ -37,8 +38,9 @@ namespace launch {
 enum policy {
     async    = 0x01,
     deferred = 0x02,
+	pooled   = 0x04,
     sync     = deferred,
-    any      = async | deferred
+    any      = async | deferred | pooled
 };
 };
 
@@ -58,14 +60,18 @@ template< typename F >
 auto async(launch::policy policy, const F& f) -> future<decltype(f())> {
 	typedef decltype(f())                result_type;
 	typedef packaged_task<result_type()> task_type;
-	return async_impl(policy, task_type(f));
+	return /*((policy & launch::pooled) != 0) 
+		? thread_pool::instance().submit_task(f)
+		: */async_impl(policy, task_type(f));
 }
 
 template< typename F >
 auto async(launch::policy policy, F&& f) -> future<decltype(f())> {
 	typedef decltype(f())                result_type;
 	typedef packaged_task<result_type()> task_type;
-	return async_impl(policy, task_type(std::move(f)));
+	return /*((policy & launch::pooled) != 0) 
+		? thread_pool::instance().submit_task(std::move(f))
+		: */async_impl(policy, task_type(std::move(f)));
 }
 
 template< typename F >

@@ -41,8 +41,12 @@ class concurrent_queue;
 
 class thread_pool {
 public:
+	enum {
+		DEFAULT_POOL_SIZE = 4,
+	};
+
 	// Construction and Destruction
-	explicit thread_pool(unsigned thread_count = 4);
+	explicit thread_pool(unsigned thread_count = DEFAULT_POOL_SIZE);
 	~thread_pool();
 
 	// Submitting tasks for execution
@@ -51,6 +55,11 @@ public:
 
 	template<typename F>
 	auto submit_task(F&& f) -> future<decltype(f())>;
+
+	static thread_pool& instance() {
+		static thread_pool pool(DEFAULT_POOL_SIZE);
+		return pool;
+	}
 
 private:
 	_TTHREAD_DISABLE_ASSIGNMENT(thread_pool);

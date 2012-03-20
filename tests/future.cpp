@@ -31,15 +31,15 @@ freely, subject to the following restrictions:
 #include <tinythread.h>
 #include <tinythread_async.h>
 #include <tinythread_future.h>
+#define USE_CONTINUATIONS
 using namespace tthread;
 #else
+#include <chrono>
+#include <thread>
 #include <future>
 #endif
 
 using namespace std;
-
-#if USE_TTHREAD
-#endif
 
 int ackermann(int m, int n) {
 	if (m == 0) return n + 1;
@@ -51,6 +51,7 @@ int main() {
 
 	///////////////////////////////////////////////////////////////////////////
 
+#if defined(USE_CONTINUATIONS)
 	try {
 		cout << "f(g0(g1(g2(g3()))) = 1*(2*(3*(4*(5)))) = " <<
 		async([]() {
@@ -67,7 +68,8 @@ int main() {
 	} catch (...) {
 		cout << "Error in async continuation." << endl << endl;
 	}
-	
+#endif
+
 	///////////////////////////////////////////////////////////////////////////
 
 	cout << "Main thread id: " << this_thread::get_id() << endl;

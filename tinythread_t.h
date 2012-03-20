@@ -45,7 +45,10 @@ public:
 
 	threadt() : thread() { }
 	threadt(threadt&& other) : thread( std::move(other) ) { }
-	threadt& operator=(threadt&& other) { swap(std::move(other)); }
+	threadt& operator=(threadt&& other) { 
+		thread::swap(std::move(other)); 
+		return *this;
+	}
 
 	template< typename thread_func_t >
 	threadt(thread_func_t&& func) : thread() {
@@ -66,19 +69,12 @@ protected:
 	template< typename thread_func_t >
 	void init(thread_func_t&& func);
 
-	inline mutex& getLock() const {
-		return mDataMutex;
-	}
-	inline void   setNotAThread(bool bNotAThread) {
-		mNotAThread = bNotAThread;
-	}
-
 	template< typename thread_func_t >
 	struct _thread_start_info_t {
-		thread_func_t mFunction; ///< Handle to the function to be executed.
-		threadt* mThread;        ///< Pointer to the thread object.
-		_thread_start_info_t(thread_func_t&& func, threadt* thread)
-			: mFunction(std::move(func)), mThread(thread) { }
+		thread_func_t    mFunction;   ///< Handle to the function to be executed.
+		thread::data_ptr mThreadData; ///< Pointer to the thread data.
+		_thread_start_info_t(thread_func_t&& func, thread::data_ptr threadData)
+			: mFunction(std::move(func)), mThreadData(threadData) { }
 	};
 
 	template< class thread_func_t >
@@ -93,27 +89,32 @@ protected:
 template< typename thread_func_t >
 void threadt::init(thread_func_t&& func) {
 	// Serialize access to this thread structure
-	lock_guard<mutex> guard(mDataMutex);
+	lock_guard<mutex> guard(mData->mMutex);
 
 	// Fill out the thread startup information (passed to the thread wrapper,
 	// which will eventually free it)
-	auto ti = new _thread_start_info_t<thread_func_t>(std::move(func), this);
+	typedef _thread_start_info_t<thread_func_t> thread_info;
+	std::unique_ptr<thread_info> ti( new thread_info(std::move(func), mData) );
+
+	thread_data& data = *mData;
 
 	// The thread is now alive
-	mNotAThread = false;
+	data.mNotAThread = false;
 
 	// Create the thread
 #if defined(_TTHREAD_WIN32_)
-	mHandle = (HANDLE) _beginthreadex(0, 0, wrapper_function<thread_func_t>, (void*) ti, 0, &mWin32ThreadID);
+	data.mHandle = (HANDLE) _beginthreadex(0, 0, wrapper_function<thread_func_t>, (void*) ti.get(), 0, &data.mWin32ThreadID);
 #elif defined(_TTHREAD_POSIX_)
-	if (pthread_create(&mHandle, NULL, wrapper_function<thread_func_t>, (void*) ti) != 0)
-		mHandle = 0;
+	if (pthread_create(&data.mHandle, NULL, wrapper_function<thread_func_t>, (void*) ti.get()) != 0)
+		data.mHandle = 0;
 #endif
 
 	// Did we fail to create the thread?
-	if (!mHandle) {
-		mNotAThread = true;
-		delete ti;
+	if (!data.mHandle) {
+		data.mNotAThread = true;
+	} else {
+		// Release ownership of the thread info object
+		ti.release();
 	}
 }
 
@@ -132,14 +133,11 @@ void* threadt::wrapper_function(void* aArg)
 	try {
 		ti->mFunction();
 	} catch (...) {
-		// Uncaught exceptions will terminate the application (default behavior
-		// according to the C++0x draft)
 		std::terminate();
 	}
 
-	// The thread is no longer executing
-	//lock_guard<mutex> guard(ti->mThread->getLock());
-	ti->mThread->setNotAThread(true);
+	lock_guard<mutex> guard(ti->mThreadData->mMutex);
+	ti->mThreadData->mNotAThread = true;
 
 	return 0;
 }

@@ -38,12 +38,18 @@ public:
 
 	void push(const T& data) {
 		lock guard(mLock);
+		if (mDestroy)
+			return;
+
 		mQ.push(data);
 		// Unlock?
 		mCondition.notify_one();
 	}
 	void push(T&& data) {
 		lock guard(mLock);
+		if (mDestroy)
+			return;
+
 		mQ.emplace(std::move(data));
 		// Unlock?
 		mCondition.notify_one();
@@ -66,24 +72,6 @@ public:
 		return true;
 	}
 
-	template< typename handler >
-	bool wait_and_pop_with(handler& handler) {
-		lock guard(mLock);
-
-		while(!mDestroy && mQ.empty()) {
-			mCondition.wait(mLock);
-		}
-
-		if (mDestroy)
-			return false;
-
-		mLock.unlock();
-		handler(mQ.front());
-		mLock.lock();
-		mQ.pop();
-		return true;
-	}
-
 	bool wait_and_pop(T& value) {
 		lock guard(mLock);
 
@@ -102,6 +90,8 @@ public:
 	void destroy() {
 		lock guard(mLock);
 		mDestroy = true;
+		while (!mQ.empty()) 
+			mQ.pop();
 		mCondition.notify_all();
 	}
 

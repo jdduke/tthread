@@ -34,23 +34,14 @@ freely, subject to the following restrictions:
 #include <memory>
 #include <stdexcept>
 
-#if !defined(_MSC_VER)
-#define _TTHREAD_VARIADIC_
-#endif
-
 // Macro for disabling assignments of objects.
-#ifdef _TTHREAD_CPP0X_PARTIAL_
-#define _TTHREAD_DISABLE_ASSIGNMENT(name) \
-	name(const name&) = delete; \
-	name& operator=(const name&) = delete;
-#else
-#define _TTHREAD_DISABLE_ASSIGNMENT(name) \
-	name(const name&); \
-	name& operator=(const name&);
+#if defined(_MSC_VER)
 namespace std {
-template <typename T>
-typename std::add_rvalue_reference<T>::type declval();
+	template <typename T>
+	typename std::add_rvalue_reference<T>::type declval();
 }
+#else
+#define _TTHREAD_VARIADIC_
 #endif
 
 namespace tthread {
@@ -472,6 +463,7 @@ public:
 
 	typedef packaged_task_impl<R, void> base;
 
+	packaged_task() { }
 	explicit packaged_task(R(*f)(void)) : base(f) { }
 	template < typename F >
 	explicit packaged_task(const F& f)  : base(f) { }
@@ -515,6 +507,7 @@ public:
 
 	typedef packaged_task_impl<R, Arg> base;
 
+	packaged_task() { }
 	explicit packaged_task(R(*f)(Arg)) : base(std::move(f)) { }
 	template < typename F >
 	explicit packaged_task(const F& f) : base(std::move(f)) { }
@@ -617,7 +610,5 @@ auto future<R>::then(F f) -> future<decltype(f(std::declval<R>()))> {
 }
 
 } // namespace tthread
-
-#undef _TTHREAD_DISABLE_ASSIGNMENT
 
 #endif // _TINYTHREAD_FUTURE_H_

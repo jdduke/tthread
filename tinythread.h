@@ -94,9 +94,11 @@ Modified (m) 2011 Jared Duke
 #if (__cplusplus > 199711L) || (defined(__STDCXX_VERSION__) && (__STDCXX_VERSION__ >= 201001L))
   #define _TTHREAD_CPP0X_
   #define _TTHREAD_FUNCTIONAL_
+  #define _TTHREAD_RVALUES_
   #include <tr1/functional>
 #elif (defined(_MSC_VER) && _MSC_VER >= 1600)
   #define _TTHREAD_FUNCTIONAL_
+  #define _TTHREAD_RVALUES_
   #include <functional>
 #endif
 
@@ -505,6 +507,29 @@ class thread {
 #endif
     {}
 
+#if defined(_TTHREAD_RVALUES_)
+	/// Move constructor.
+	/// Construct a \c thread object from an existing thread object
+	thread(thread&& other) {
+		*this = std::move(other);
+	}
+
+	thread& operator=(thread&& other) {
+		swap(std::move(other));
+		return *this;
+	}
+
+	void swap(thread&& other) {
+		lock_guard<mutex> guard(mDataMutex);
+		std::swap(mHandle,        other.mHandle);
+		std::swap(mNotAThread,    other.mNotAThread);
+#if defined(_TTHREAD_WIN32_)
+		std::swap(mWin32ThreadID, other.mWin32ThreadID);
+#endif
+	}
+
+#endif
+
     /// Thread starting constructor.
     /// Construct a \c thread object with a new thread of execution.
     /// @param[in] thread_func A function pointer to a function of type:
@@ -708,8 +733,5 @@ namespace this_thread {
 }
 
 }
-
-// Define/macro cleanup
-#undef _TTHREAD_DISABLE_ASSIGNMENT
 
 #endif // _TINYTHREAD_H_

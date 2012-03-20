@@ -126,4 +126,7 @@ if(BUILD_TESTS)
 
   add_executable(future tests/future.cpp)
   target_link_libraries(future ${TTHREAD_LIBS})
+
+  add_executable(pool tests/pool.cpp)
+  target_link_libraries(pool ${TTHREAD_LIBS})
 endif()

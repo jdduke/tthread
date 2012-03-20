@@ -111,6 +111,4 @@ auto async(F f, T&& t, U&& u, V&& v, W&& w) -> future<decltype(f(t, u, v, w))> {
 
 } // namespace tthread
 
-#undef _TTHREAD_DISABLE_ASSIGNMENT
-
 #endif // _TINYTHREAD_ASYNC_H_

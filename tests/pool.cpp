@@ -1,0 +1,55 @@
+/*
+Copyright (c) 2012 Jared Duke
+
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+    1. The origin of this software must not be misrepresented; you must not
+    claim that you wrote the original software. If you use this software
+    in a product, an acknowledgment in the product documentation would be
+    appreciated but is not required.
+
+    2. Altered source versions must be plainly marked as such, and must not be
+    misrepresented as being the original software.
+
+    3. This notice may not be removed or altered from any source
+    distribution.
+*/
+
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+#include <tinythread_pool.h>
+
+using namespace tthread;
+using namespace std;
+
+int ackermann(int m, int n) {
+	if (m == 0) return n + 1;
+	if (n == 0) return ackermann(m - 1, 1);
+	return ackermann(m - 1, ackermann(m, n - 1));
+}
+
+int main() {
+
+	thread_pool pool(4);
+
+	std::vector<future<void>> mFutures;
+
+	for (int i = 0; i < 12; ++i) {
+		mFutures.emplace_back(
+			pool.submit_task([]() {
+				std::cout << "Ackerman(" << this_thread::get_id() << ") = " 
+					<< ackermann(3, 11) 
+					<< std::endl;
+			})
+		);
+	}
+
+}

@@ -43,6 +43,10 @@ namespace tthread {
 class threadt : public thread {
 public:
 
+	threadt() : thread() { }
+	threadt(threadt&& other) : thread( std::move(other) ) { }
+	threadt& operator=(threadt&& other) { swap(std::move(other)); }
+
 	template< typename thread_func_t >
 	threadt(thread_func_t&& func) : thread() {
 		init(std::move(func));
@@ -56,6 +60,8 @@ public:
 #endif
 
 protected:
+
+	_TTHREAD_DISABLE_ASSIGNMENT(threadt);
 
 	template< typename thread_func_t >
 	void init(thread_func_t&& func);

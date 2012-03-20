@@ -8,3 +8,4 @@ This project extends TinyThread++ by providing
 * Lambda function execution
 * tthread::future and tthread::async, lightweight analogs to std::future and std::async
 * future.then() support for task continuations
+* basic fifo threadpooling with thread_pool

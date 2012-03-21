@@ -32,6 +32,8 @@ freely, subject to the following restrictions:
 
 #include <vector>
 
+//#define NO_GENERIC_POOL
+
 namespace tthread {
 
 ///////////////////////////////////////////////////////////////////////////
@@ -61,12 +63,16 @@ public:
 		return pool;
 	}
 
-private:
-	_TTHREAD_DISABLE_ASSIGNMENT(thread_pool);
-
+#if defined(NO_GENERIC_POOL)
 	typedef packaged_task<void(void)>      Function;
+#else
+	typedef std::shared_ptr< packaged_task_continuation< void > > Function;
+#endif
 	typedef concurrent_queue<Function>     FunctionQueue;
 	typedef std::shared_ptr<FunctionQueue> FunctionQueuePtr;
+
+private:
+	_TTHREAD_DISABLE_ASSIGNMENT(thread_pool);
 
 	// TODO: Add lock for concurrent access from producers
 	FunctionQueuePtr     mFunctionQueue;
@@ -78,7 +84,11 @@ private:
 template< typename Queue, typename Task > 
 auto submit_task_impl(Queue& q, Task&& task) -> decltype(task.get_future()) {
 	auto future = task.get_future();
+#if defined(NO_GENERIC_POOL)
 	q.push(std::move(task));
+#else
+	q.push(thread_pool::Function(new Task(std::move(task))));
+#endif
 	return future;
 }
 

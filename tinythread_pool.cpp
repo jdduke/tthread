@@ -41,7 +41,11 @@ thread_pool::thread_pool( unsigned thread_count )
 		mThreads.emplace_back( threadt( [=]() {
 			Function f;
 			while (q->wait_and_pop(f)) {
+#if defined(NO_GENERIC_POOL)
 				f();
+#else
+				(*f)();
+#endif
 			}
 		}) );
 	}

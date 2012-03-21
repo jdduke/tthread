@@ -60,18 +60,22 @@ template< typename F >
 auto async(launch::policy policy, const F& f) -> future<decltype(f())> {
 	typedef decltype(f())                result_type;
 	typedef packaged_task<result_type()> task_type;
-	return /*((policy & launch::pooled) != 0) 
-		? thread_pool::instance().submit_task(f)
-		: */async_impl(policy, task_type(f));
+	return 
+#if !defined(NO_GENERIC_POOOL)
+		((policy & launch::pooled) != 0) ? thread_pool::instance().submit_task(f) : 
+#endif
+		async_impl(policy, task_type(f));
 }
 
 template< typename F >
 auto async(launch::policy policy, F&& f) -> future<decltype(f())> {
 	typedef decltype(f())                result_type;
 	typedef packaged_task<result_type()> task_type;
-	return /*((policy & launch::pooled) != 0) 
-		? thread_pool::instance().submit_task(std::move(f))
-		: */async_impl(policy, task_type(std::move(f)));
+	return
+#if !defined(NO_GENERIC_POOOL)
+		((policy & launch::pooled) != 0) ? thread_pool::instance().submit_task(std::move(f)) : 
+#endif
+		async_impl(policy, task_type(std::move(f)));
 }
 
 template< typename F >

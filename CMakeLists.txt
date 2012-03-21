@@ -110,7 +110,7 @@ else()
   set(TTHREAD_LIBS tthread)
 endif()
 
-set(BUILD_TESTS TRUE CACHE BOOL "Build unit tests")
+set(BUILD_TESTS FALSE CACHE BOOL "Build unit tests")
 
 if(BUILD_TESTS)
   include_directories(.)

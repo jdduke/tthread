@@ -30,7 +30,7 @@ using namespace std;
 using namespace tthread;
 
 // HACK: Mac OS X and early MinGW do not support thread-local storage
-#if defined(__APPLE__) || (defined(__MINGW32__) && (__GNUC__ < 4))
+#if defined(__APPLE__) || (defined(__MINGW32__) || (__GNUC__ < 4))
  #define NO_TLS
 #endif
 

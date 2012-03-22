@@ -76,7 +76,7 @@ int main() {
 	vector<future<void>> futures;
 	for (int i = 0; i < 8; ++i) {
 		futures.emplace_back(async([] {
-			this_thread::sleep_for(chrono::seconds(1));
+			this_thread::sleep_for(chrono::milliseconds(100));
 			cout << this_thread::get_id() << " ";
 		}));
 	}

@@ -175,8 +175,8 @@ struct async_result {
 	typedef async_result<R> this_type;
 
 	~async_result() {
-		lock guard(mLock);
-		mCondition.notify_all();
+		//lock guard(mLock);
+		//mCondition.notify_all();
 	}
 
 	bool ready() const volatile {

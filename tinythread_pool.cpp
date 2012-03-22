@@ -23,14 +23,9 @@ freely, subject to the following restrictions:
 
 #include "tinythread_pool.h"
 
-using namespace tthread;
+#include <iostream>
 
-struct FunctionExecute {
-	template< typename Task > 
-	void operator()(Task& task) const {
-		task();
-	}
-};
+using namespace tthread;
 
 thread_pool::thread_pool( unsigned thread_count ) 
 	: mFunctionQueue( new FunctionQueue() )
@@ -49,6 +44,7 @@ thread_pool::thread_pool( unsigned thread_count )
 			}
 		}) );
 	}
+
 }
 
 tthread::thread_pool::~thread_pool() {

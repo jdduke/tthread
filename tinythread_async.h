@@ -61,7 +61,7 @@ auto async(launch::policy policy, const F& f) -> future<decltype(f())> {
 	typedef decltype(f())                result_type;
 	typedef packaged_task<result_type()> task_type;
 	return 
-#if !defined(NO_GENERIC_POOOL)
+#if !defined(NO_GENERIC_POOL)
 		((policy & launch::pooled) != 0) ? thread_pool::instance().submit_task(f) : 
 #endif
 		async_impl(policy, task_type(f));
@@ -72,7 +72,7 @@ auto async(launch::policy policy, F&& f) -> future<decltype(f())> {
 	typedef decltype(f())                result_type;
 	typedef packaged_task<result_type()> task_type;
 	return
-#if !defined(NO_GENERIC_POOOL)
+#if !defined(NO_GENERIC_POOL)
 		((policy & launch::pooled) != 0) ? thread_pool::instance().submit_task(std::move(f)) : 
 #endif
 		async_impl(policy, task_type(std::move(f)));

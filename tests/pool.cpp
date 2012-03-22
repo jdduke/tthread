@@ -28,6 +28,8 @@ freely, subject to the following restrictions:
 
 #include <tinythread_pool.h>
 
+#include "timer.h"
+
 using namespace tthread;
 using namespace std;
 
@@ -44,22 +46,41 @@ int main(int argc, char* argv[]) {
 		std::istringstream ss(argv[1]);
 		ss >> pool_size;
 	}
+
 	thread_pool pool(pool_size);
 
-	vector<future<void>> mFutures;
+	{
+		vector<future<void>> mFutures;
 
-	for (int i = 0; i < 20; ++i) {
-		mFutures.emplace_back(
-			pool.submit_task([]() {
-				std::cout << "Ackerman(" << this_thread::get_id() << ") = " 
-					<< ackermann(3, 11) 
-					<< std::endl;
+		timed_run session("Ackerman 10");
+
+		for (int i = 0; i < 10; ++i) {
+			mFutures.emplace_back(
+				pool.submit_task([]() {
+					std::cout << "Ackerman(" << this_thread::get_id() << ") = " 
+						<< ackermann(3, 10) 
+						<< std::endl;
 			})
-		);
+				);
+		}
+
+		for (auto it = begin(mFutures); it != end(mFutures); ++it) {
+			it->wait();
+		}
 	}
 
-	for (auto it = begin(mFutures); it != end(mFutures); ++it) {
-		it->wait();
-	}
+	{
+		vector<future<int>> mFutures;
 
+		timed_run session("SimpleThread 500000");
+
+		for (int i = 0; i < 500000; ++i) {
+			mFutures.emplace_back(
+				pool.submit_task([]() -> int { return ackermann(3,4); }));
+		}
+
+		for (auto it = begin(mFutures); it != end(mFutures); ++it) {
+			it->wait();
+		}
+	}
 }

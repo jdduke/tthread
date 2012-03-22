@@ -15,8 +15,6 @@
 #include <unistd.h>
 #endif
 
-namespace time {
-
 class timer {
 public:
 
@@ -111,12 +109,10 @@ double timer::elapsed() {
 #endif
 
 struct timed_run {
-  timed_run( const char* desc ) : desc(desc) { }
-  ~timed_run( ) { std::cout << desc << "\t\t" << timer.elapsed() << " (s)" << std::endl; }
-  timer timer;
-  const char* desc;
+  timed_run( const char* desc ) : mDesc(desc) { }
+  ~timed_run( ) { std::cout << mDesc << "\t" << mTimer.elapsed() << " (s)" << std::endl; }
+  timer mTimer;
+  const char* mDesc;
 };
-
-}
 
 #endif // _TIMER_H_

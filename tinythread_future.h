@@ -311,21 +311,21 @@ public:
 	template < typename F >
 	explicit packaged_task(const F& f)     : mFunc(f) { }
 	template < typename F >
-	explicit packaged_task(F && f)          : mFunc(std::move(f)) { }
+	explicit packaged_task(F && f)         : mFunc(std::move(f)) { }
 
 	///////////////////////////////////////////////////////////////////////////
 	// move support
 
-	packaged_task(packaged_task && other) {
+	packaged_task(packaged_task&& other) {
 		*this = std::move(other);
 	}
 
-	packaged_task& operator=(packaged_task && other) {
+	packaged_task& operator=(packaged_task&& other) {
 		swap(std::move(other));
 		return *this;
 	}
 
-	void swap(packaged_task && other) {
+	void swap(packaged_task&& other) {
 		lock guard(mLock);
 		std::swap(mFunc,   other.mFunc);
 		std::swap(mResult, other.mResult);
@@ -381,7 +381,6 @@ template< typename R, typename Arg >
 class packaged_task_impl : public packaged_task_continuation<Arg> {
 public:
 	typedef R   result_type;
-	typedef Arg arg_type;
 	typedef std::shared_ptr< async_result<result_type> > async_result_ptr;
 
 	///////////////////////////////////////////////////////////////////////////
@@ -408,11 +407,10 @@ public:
 		return *this;
 	}
 
-	void swap(packaged_task_impl && other) {
+	void swap(packaged_task_impl&& other) {
 		lock guard(mLock);
-		//lock guardOther(other.mLock);
-		std::swap(mFunc,      std::move(other.mFunc));
-		std::swap(mResult,    std::move(other.mResult));
+		std::swap(mFunc,   other.mFunc);
+		std::swap(mResult, other.mResult);
 	}
 
 	///////////////////////////////////////////////////////////////////////////
@@ -471,14 +469,17 @@ public:
 	///////////////////////////////////////////////////////////////////////////
 	// move support
 
-	packaged_task(packaged_task && other) {
+	packaged_task(packaged_task&& other) {
 		*this = std::move(other);
 	}
 
-	packaged_task& operator=(packaged_task && other) {
+	packaged_task& operator=(packaged_task&& other) {
 		swap(std::move(other));
 		return *this;
 	}
+
+	///////////////////////////////////////////////////////////////////////////
+	// execution
 
 	void operator()();
 
@@ -506,16 +507,16 @@ public:
 	typedef packaged_task_impl<R, Arg> base;
 
 	packaged_task() { }
-	explicit packaged_task(R(*f)(Arg)) : base(std::move(f)) { }
+	explicit packaged_task(R(*f)(Arg)) : base(f) { }
 	template < typename F >
-	explicit packaged_task(const F& f) : base(std::move(f)) { }
+	explicit packaged_task(const F& f) : base(f) { }
 	template < typename F >
 	explicit packaged_task(F&& f)      : base(std::move(f)) { }
 
 	///////////////////////////////////////////////////////////////////////////
 	// move support
 
-	packaged_task(packaged_task && other) {
+	packaged_task(packaged_task&& other) {
 		*this = std::move(other);
 	}
 
@@ -523,6 +524,9 @@ public:
 		swap(std::move(other));
 		return *this;
 	}
+
+	///////////////////////////////////////////////////////////////////////////
+	// execution
 
 	void operator()(Arg);
 
@@ -548,7 +552,9 @@ class future {
 public:
 	typedef std::shared_ptr< async_result<R> > async_result_ptr;
 
-	future(future<R>&& other)       : mResult(std::move(other.mResult)) { }
+	future(future<R>&& other) {
+		std::swap(mResult, other.mResult);
+	}
 	future(async_result_ptr result) : mResult(result) { }
 	~future() { }
 
@@ -573,7 +579,10 @@ public:
 	void wait();
 
 	template< typename F >
-	auto then(F f) -> future<decltype(f(std::declval<R>()))>;
+	auto then(const F& f) -> future<decltype(f(std::declval<R>()))>;
+
+	template< typename F >
+	auto then(F&& f) -> future<decltype(f(std::declval<R>()))>;
 
 protected:
 
@@ -597,8 +606,20 @@ void future<R>::wait() {
 
 template< typename R >
 template< typename F >
-auto future<R>::then(F f) -> future<decltype(f(std::declval<R>()))> {
-	typedef decltype(f(std::declval<R>()))   result_type;
+auto future<R>::then(const F& f) -> future<decltype(f(std::declval<R>()))> {
+	typedef decltype(f(std::declval<R>()))  result_type;
+	typedef packaged_task< result_type(R) > task_type;
+
+	std::unique_ptr<task_type> continuation(new task_type(f));
+	mResult->setContinuation(continuation.get());
+
+	return continuation.release()->get_future();
+}
+
+template< typename R >
+template< typename F >
+auto future<R>::then(F&& f) -> future<decltype(f(std::declval<R>()))> {
+	typedef decltype(f(std::declval<R>()))  result_type;
 	typedef packaged_task< result_type(R) > task_type;
 
 	std::unique_ptr<task_type> continuation(new task_type(std::move(f)));

@@ -429,6 +429,8 @@ public:
 			mResult.reset(new async_result<R>());
 		return future<R>(mResult);
 	}
+protected:
+	_TTHREAD_DISABLE_ASSIGNMENT(packaged_task_impl);
 
 	async_result_ptr& process(async_result_ptr& result) {
 		if (*this) {
@@ -443,12 +445,9 @@ public:
 		return result;
 	}
 
-protected:
-	_TTHREAD_DISABLE_ASSIGNMENT(packaged_task_impl);
-
-	mutable future_mutex               mLock;
-	std::function<R(Arg)>              mFunc;
-	std::shared_ptr< async_result<R> > mResult;
+	mutable future_mutex  mLock;
+	std::function<R(Arg)> mFunc;
+	async_result_ptr      mResult;
 };
 
 ///////////////////////////////////////////////////////////////////////////

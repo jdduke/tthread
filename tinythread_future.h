@@ -36,8 +36,8 @@ freely, subject to the following restrictions:
 
 #if defined(_MSC_VER)
 namespace std {
-	template <typename T>
-	typename std::add_rvalue_reference<T>::type declval();
+template <typename T>
+typename std::add_rvalue_reference<T>::type declval();
 }
 #else
 #define _TTHREAD_VARIADIC_
@@ -309,9 +309,7 @@ public:
 
 	explicit packaged_task(R(*f)(Args...)) : mFunc(f) { }
 	template < typename F >
-	explicit packaged_task(const F& f)     : mFunc(f) { }
-	template < typename F >
-	explicit packaged_task(F && f)         : mFunc(std::move(f)) { }
+	explicit packaged_task(F f)            : mFunc(std::move(f)) { }
 
 	///////////////////////////////////////////////////////////////////////////
 	// move support
@@ -391,9 +389,7 @@ public:
 
 	explicit packaged_task_impl(R(*f)(Arg)) : mFunc(f) { }
 	template < typename F >
-	explicit packaged_task_impl(const F& f) : mFunc(f) { }
-	template < typename F >
-	explicit packaged_task_impl(F&& f)      : mFunc(std::move(f)) { }
+	explicit packaged_task_impl(F f)        : mFunc(std::move(f)) { }
 
 	///////////////////////////////////////////////////////////////////////////
 	// move support
@@ -462,9 +458,7 @@ public:
 	packaged_task() { }
 	explicit packaged_task(R(*f)(void)) : base(f) { }
 	template < typename F >
-	explicit packaged_task(const F& f)  : base(f) { }
-	template < typename F >
-	explicit packaged_task(F&& f)       : base(std::move(f)) { }
+	explicit packaged_task(F f)         : base(std::move(f)) { }
 
 	///////////////////////////////////////////////////////////////////////////
 	// move support
@@ -509,9 +503,7 @@ public:
 	packaged_task() { }
 	explicit packaged_task(R(*f)(Arg)) : base(f) { }
 	template < typename F >
-	explicit packaged_task(const F& f) : base(f) { }
-	template < typename F >
-	explicit packaged_task(F&& f)      : base(std::move(f)) { }
+	explicit packaged_task(F f)        : base(std::move(f)) { }
 
 	///////////////////////////////////////////////////////////////////////////
 	// move support
@@ -579,10 +571,7 @@ public:
 	void wait();
 
 	template< typename F >
-	auto then(const F& f) -> future<decltype(f(std::declval<R>()))>;
-
-	template< typename F >
-	auto then(F&& f) -> future<decltype(f(std::declval<R>()))>;
+	auto then(F f) -> future<decltype(f(std::declval<R>()))>;
 
 protected:
 
@@ -606,19 +595,7 @@ void future<R>::wait() {
 
 template< typename R >
 template< typename F >
-auto future<R>::then(const F& f) -> future<decltype(f(std::declval<R>()))> {
-	typedef decltype(f(std::declval<R>()))  result_type;
-	typedef packaged_task< result_type(R) > task_type;
-
-	std::unique_ptr<task_type> continuation(new task_type(f));
-	mResult->setContinuation(continuation.get());
-
-	return continuation.release()->get_future();
-}
-
-template< typename R >
-template< typename F >
-auto future<R>::then(F&& f) -> future<decltype(f(std::declval<R>()))> {
+auto future<R>::then(F f) -> future<decltype(f(std::declval<R>()))> {
 	typedef decltype(f(std::declval<R>()))  result_type;
 	typedef packaged_task< result_type(R) > task_type;
 

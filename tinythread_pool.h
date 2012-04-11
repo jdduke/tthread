@@ -66,7 +66,7 @@ public:
 #if defined(NO_GENERIC_POOL)
 	typedef packaged_task<void(void)>      Function;
 #else
-	typedef std::shared_ptr< packaged_task_continuation< void > > Function;
+	typedef std::shared_ptr<packaged_task_continuation< void > > Function;
 #endif
 	typedef concurrent_queue<Function>     FunctionQueue;
 	typedef std::shared_ptr<FunctionQueue> FunctionQueuePtr;

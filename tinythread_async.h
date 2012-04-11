@@ -36,11 +36,11 @@ namespace tthread {
 // launch
 namespace launch {
 enum policy {
-    async    = 0x01,
-    deferred = 0x02,
+	async    = 0x01,
+	deferred = 0x02,
 	pooled   = 0x04,
-    sync     = deferred,
-    any      = async | deferred | pooled
+	sync     = deferred,
+	any      = async | deferred | pooled
 };
 };
 

@@ -39,26 +39,26 @@ freely, subject to the following restrictions:
 /// @file
 namespace tthread {
 
-/// Thread class.
+/// Thread class with template argument support.
 class threadt : public thread {
 public:
 
 	threadt() : thread() { }
-	threadt(threadt&& other) : thread( std::move(other) ) { }
+	threadt(threadt&& other) : thread(std::move(other)) { }
 	threadt& operator=(threadt&& other) { 
 		thread::swap(std::move(other)); 
 		return *this;
 	}
 
 	template< typename thread_func_t >
-	threadt(thread_func_t&& func) : thread() {
+	threadt(thread_func_t func) : thread() {
 		init(std::move(func));
 	}
 
 #if defined(_TTHREAD_VARIADIC_)
 	template< typename thread_func_t, typename Args... >
-	threadt(thread_func_t&& func, Args&&... args) : thread() {
-		init(std::bind(func, args...));
+	threadt(thread_func_t func, Args... args) : thread() {
+		init(std::bind(std::move(func), std::move(args)...));
 	}
 #endif
 
@@ -67,7 +67,7 @@ protected:
 	_TTHREAD_DISABLE_ASSIGNMENT(threadt);
 
 	template< typename thread_func_t >
-	void init(thread_func_t&& func);
+	void init(thread_func_t func);
 
 	template< typename thread_func_t >
 	struct _thread_start_info_t {
@@ -87,7 +87,7 @@ protected:
 };
 
 template< typename thread_func_t >
-void threadt::init(thread_func_t&& func) {
+void threadt::init(thread_func_t func) {
 	// Serialize access to this thread structure
 	lock_guard<mutex> guard(mData->mMutex);
 

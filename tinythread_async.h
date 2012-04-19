@@ -56,64 +56,50 @@ auto async_impl(launch::policy policy, Task&& task) -> decltype(task.get_future(
 	return future;
 }
 
-template< typename F >
-auto async(launch::policy policy, const F& f) -> future<decltype(f())> {
-	typedef decltype(f())                result_type;
-	typedef packaged_task<result_type()> task_type;
-	return 
-#if !defined(NO_GENERIC_POOL)
-		((policy & launch::pooled) != 0) ? thread_pool::instance().submit_task(f) : 
-#endif
-		async_impl(policy, task_type(f));
-}
+/////////////////////////////////////////////////////////////////////////
 
 template< typename F >
-auto async(launch::policy policy, F&& f) -> future<decltype(f())> {
+auto async(launch::policy policy, F f) -> future<decltype(f())> {
 	typedef decltype(f())                result_type;
 	typedef packaged_task<result_type()> task_type;
 	return
 #if !defined(NO_GENERIC_POOL)
-		((policy & launch::pooled) != 0) ? thread_pool::instance().submit_task(std::move(f)) : 
+		((policy & launch::pooled) != 0) ? thread_pool::instance().submit_task(std::move(f)) :
 #endif
 		async_impl(policy, task_type(std::move(f)));
 }
 
 template< typename F >
-auto async(const F& f) -> future<decltype(f())> {
-	return async(launch::any, f);
-}
-
-template< typename F >
-auto async(F&& f) -> future<decltype(f())> {
+auto async(F f) -> future<decltype(f())> {
 	return async(launch::any, std::move(f));
 }
 
 #if defined(_TTHREAD_VARIADIC_)
 
 template< typename F, typename... Args >
-auto async(F f, Args&& ... args) -> future<decltype(f(args...))> {
+auto async(F f, Args... args) -> future<decltype(f(args...))> {
 	return async(std::bind(f, std::move(args)...));
 }
 
 #else
 
 template< typename F, typename T >
-auto async(F f, T&& t) -> future<decltype(f(t))> {
+auto async(F f, T t) -> future<decltype(f(t))> {
 	return async(std::bind(f, std::move(t)));
 }
 
 template< typename F, typename T, typename U >
-auto async(F f, T&& t, U&& u) -> future<decltype(f(t, u))> {
+auto async(F f, T t, U u) -> future<decltype(f(t, u))> {
 	return async(std::bind(f, std::move(t), std::move(u)));
 }
 
 template< typename F, typename T, typename U, typename V >
-auto async(F f, T&& t, U&& u, V&& v) -> future<decltype(f(t, u, v))> {
+auto async(F f, T t, U u, V v) -> future<decltype(f(t, u, v))> {
 	return async(std::bind(f, std::move(t), std::move(u), std::move(v)));
 }
 
 template< typename F, typename T, typename U, typename V, typename W >
-auto async(F f, T&& t, U&& u, V&& v, W&& w) -> future<decltype(f(t, u, v, w))> {
+auto async(F f, T t, U u, V v, W w) -> future<decltype(f(t, u, v, w))> {
 	return async(std::bind(f, std::move(t), std::move(u), std::move(v)));
 }
 
